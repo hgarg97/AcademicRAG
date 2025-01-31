@@ -16,9 +16,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-os.environ['HF_TOKEN']=os.getenv("HF_TOKEN")
-embeddings=HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-
+embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")  
 
 ## set up Streamlit 
 st.title("Conversational RAG With PDF uplaods and chat history")
@@ -54,7 +52,7 @@ if api_key:
             documents.extend(docs)
 
     # Split and create embeddings for the documents
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=5000, chunk_overlap=500)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents(documents)
         vectorstore = Chroma.from_documents(documents=splits, embedding=embeddings)
         retriever = vectorstore.as_retriever()    

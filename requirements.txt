@@ -22,3 +22,5 @@ langchain-community
 cassandra-driver
 streamlit
 langchain-groq
+langchain-chroma
+langchain-huggingface
