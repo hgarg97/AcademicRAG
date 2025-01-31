@@ -21,3 +21,4 @@ pymupdf
 langchain-community
 cassandra-driver
 streamlit
+langchain-groq
