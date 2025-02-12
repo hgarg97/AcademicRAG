@@ -1,6 +1,6 @@
-# **Animal Science AI Bot 🐮🤖**
+# **AcademicRAG 🧠📚**
 
-**Animal Science AI Bot** is a Retrieval-Augmented Generation (RAG)-based chatbot designed to query and extract information from a vast collection of animal science research papers. This project leverages **LangChain**, **Astra DB (Serverless Cassandra with Vector Search)**, **OpenAI LLMs**, and **Groq LLAMA 3.3** to build an intelligent research assistant. Additionally, we will be exploring **Agentic AI** methodologies to enhance response accuracy and contextual understanding.
+**AcademicRAG** is a Retrieval-Augmented Generation (RAG)-based chatbot designed to query and extract information from a vast collection of academic research papers. This project leverages **LangChain**, **Astra DB (Serverless Cassandra with Vector Search)**, **OpenAI LLMs**, and **Groq LLAMA 3.3** to build an intelligent research assistant. Additionally, we will be exploring **Agentic AI** methodologies to enhance response accuracy and contextual understanding.
 
 ---
 
@@ -154,4 +154,4 @@ streamlit run app.py
 
 ---
 
-💪 _Built with love for Animal Science research!_
+💪 _Built with love for academic research!_
