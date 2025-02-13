@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Define the directory containing PDFs
-pdf_directory = "Subdataset/"
+pdf_directory = "../Subdataset/"
 
 # List all PDF files in the directory
 pdf_files = [f for f in os.listdir(pdf_directory) if f.endswith(".pdf")]

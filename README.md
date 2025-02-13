@@ -1,157 +1,79 @@
 # **AcademicRAG 🧠📚**
 
-**AcademicRAG** is a Retrieval-Augmented Generation (RAG)-based chatbot designed to query and extract information from a vast collection of academic research papers. This project leverages **LangChain**, **Astra DB (Serverless Cassandra with Vector Search)**, **OpenAI LLMs**, and **Groq LLAMA 3.3** to build an intelligent research assistant. Additionally, we will be exploring **Agentic AI** methodologies to enhance response accuracy and contextual understanding.
+AcademicRAG is a Retrieval-Augmented Generation (RAG) system designed to assist researchers by extracting, retrieving, and summarizing insights from large collections of academic papers. The goal is to experiment with multiple retrieval mechanisms and optimize them for enhanced accuracy and efficiency.
 
 ---
 
-## **🗂 Project Structure**
+## **📌 Project Overview**
 
-The repository is structured as follows:
+This repository explores different RAG implementations, including:
 
-- **Main Directory:** Contains shared resources and configurations.
-  - `.env` → Stores environment variables like API keys.
-  - `requirements.txt` → Lists Python dependencies.
-- **Datasets/** → Contains research papers (excluded from Git).
-- **Project Codebase:**
-  - `create_vector_store.py` → Extracts text from PDFs, splits content, and stores embeddings in Astra DB.
-  - `app.py` → Streamlit chatbot interface using LLAMA 3.3 and Astra DB vector retrieval.
-  - `file-extraction.py` → Moves all files from subdirectories to the main folder.
+- **Vector Store-based Retrieval** (`withVectorStore_Implementation/`)
+- **Local Inference with Ollama** (`Ollama_Implementation/`)
+- **Hybrid and Advanced AI Methods** (Planned)
+
+Each implementation uses a shared `.env` configuration and dependencies.
 
 ---
 
-## **🤝 Initial Setup**
+## **📂 Folder Structure**
 
-### **1️⃣ Installing Anaconda and Setting Up the Environment**
+- `Ollama_Implementation/` → Runs a local LLM for retrieval.
+- `withVectorStore_Implementation/` → Uses Astra DB for vector-based document retrieval.
+- `.env` → Stores API keys and credentials.
+- `.gitignore` → Ensures sensitive files are not committed.
+- `file-extraction.py` → Extracts and processes research papers.
+- `LICENSE` → Open-source license details.
+- `README.md` → This document.
 
-To set up the Python environment, use Anaconda:
+---
+
+## **🚀 Getting Started**
+
+### **1️⃣ Setup the Environment**
+
+Ensure you have Python 3.10+ installed. Create and activate a virtual environment:
 
 ```bash
 conda create -p venv python==3.10
-```
-
-- **Note**: `-p` creates the environment in the current directory.
-
-Activate the environment:
-
-```bash
 conda activate venv/
 ```
 
-or
+### **2️⃣ Install Dependencies**
 
 ```bash
-conda activate /path/to/venv
+pip install -r <implementation_folder>/requirements.txt
 ```
 
----
+### **3️⃣ Configure API Keys**
 
-### **2️⃣ Installing Dependencies**
-
-Ensure you have all required dependencies installed:
-
-```bash
-pip install -r requirements.txt
-```
-
-#### **`requirements.txt` Includes:**
-
-```txt
-cassio
-datasets
-langchain
-openai
-tiktoken
-streamlit
-pymupdf
-huggingface_hub
-sentence-transformers
-```
-
----
-
-### **3️⃣ Setting Up Environment Variables**
-
-#### **Option 1: Using a `.env` File**
-
-Create a `.env` file and add:
+Set up environment variables in `.env`:
 
 ```ini
 ASTRA_DB_APPLICATION_TOKEN=<your_astra_db_token>
-ASTRA_DB_ID=<your_astra_db_id>
 OPENAI_API_KEY=<your_openai_api_key>
 GROQ_API_KEY=<your_groq_api_key>
 ```
 
-#### **Option 2: Setting Temporary Environment Variables**
+---
 
-For **Mac/Linux**:
+## **📌 Implementations**
 
-```bash
-export ASTRA_DB_APPLICATION_TOKEN="your_astra_db_token"
-export ASTRA_DB_ID="your_astra_db_id"
-export OPENAI_API_KEY="your_openai_api_key"
-export GROQ_API_KEY="your_groq_api_key"
-```
-
-For **Windows** (Command Prompt):
-
-```bash
-setx ASTRA_DB_APPLICATION_TOKEN "your_astra_db_token"
-setx ASTRA_DB_ID "your_astra_db_id"
-setx OPENAI_API_KEY "your_openai_api_key"
-setx GROQ_API_KEY "your_groq_api_key"
-```
-
-For **persistent storage** in Conda:
-
-```bash
-conda env config vars set ASTRA_DB_APPLICATION_TOKEN="your_astra_db_token"
-conda env config vars set ASTRA_DB_ID="your_astra_db_id"
-conda env config vars set OPENAI_API_KEY="your_openai_api_key"
-conda env config vars set GROQ_API_KEY="your_groq_api_key"
-conda env config vars list
-```
+| Implementation              | Description                             | Status         |
+| --------------------------- | --------------------------------------- | -------------- |
+| **Vector Store (Astra DB)** | Uses embeddings and vector search.      | ✅ Implemented |
+| **Ollama-Based Local RAG**  | Runs a local LLM for retrieval.         | 🚧 In Progress |
+| **Hybrid Search**           | Combines keyword & semantic search.     | 🛠 Planned      |
+| **Agentic AI Reasoning**    | Adds multi-step reasoning to retrieval. | 🛠 Planned      |
 
 ---
 
-## **🚀 Running the AI Bot**
+## **🔬 Future Enhancements**
 
-### **1️⃣ Extracting and Storing Research Papers in AstraDB**
+- Optimize retrieval mechanisms for academic datasets.
+- Evaluate different embedding models.
+- Develop a unified UI for seamless switching between implementations.
 
-Run the script to extract text from PDFs and store embeddings:
-
-```bash
-python create_vector_store.py
-```
-
-### **2️⃣ Running the Streamlit Chatbot**
-
-Navigate to the project directory and execute:
-
-```bash
-streamlit run app.py
-```
+💡 **This project is evolving—contributions and suggestions are welcome!** 🚀
 
 ---
-
-## **🔬 Workflow Overview**
-
-1️⃣ **Extract text from PDFs using `fitz` (PyMuPDF).**  
-2️⃣ **Split the text into smaller chunks (800 tokens with 200 overlap) for efficient vector search.**  
-3️⃣ **Embed text using HuggingFace Sentence Transformers (`all-MiniLM-L6-v2`).**  
-4️⃣ **Store embeddings in AstraDB (Serverless Cassandra with vector search).**  
-5️⃣ **Retrieve top 4 relevant documents based on similarity search.**  
-6️⃣ **Use LLAMA 3.3 via Groq API to generate responses.**  
-7️⃣ **Display responses in the Streamlit UI.**
-
----
-
-## **📌 Future Enhancements**
-
-- 📈 Fine-tune retrieval for better accuracy.
-- 🛠️ Experiment with **Agentic AI** for improved contextual reasoning.
-- 📺 Enhance UI with a more interactive research chatbot experience.
-
----
-
-💪 _Built with love for academic research!_
