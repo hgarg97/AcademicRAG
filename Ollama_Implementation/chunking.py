@@ -6,6 +6,7 @@ import numpy as np
 from nltk.tokenize.punkt import PunktSentenceTokenizer
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
+import requests
 
 # Load Sentence-BERT model
 model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -16,6 +17,9 @@ punkt_tokenizer = PunktSentenceTokenizer()
 # JSON file path
 OUTPUT_JSON = "chunked_texts.json"
 
+# DOI regex pattern
+DOI_PATTERN = r"10\.\d{4,9}/\S*[^.\s]"
+
 # Function to extract text from PDFs
 def extract_text_from_pdf(pdf_path):
     doc = fitz.open(pdf_path)
@@ -24,6 +28,31 @@ def extract_text_from_pdf(pdf_path):
         text += page.get_text("text") + "\n"
     return text.strip()
 
+# Function to extract DOI from text
+def extract_doi(text):
+    match = re.search(DOI_PATTERN, text)
+    return match.group() if match else None
+
+# Function to extract paper title (assuming title is near the beginning)
+def extract_title(text):
+    lines = text.split("\n")
+    for line in lines[:20]:  # Check first 20 lines for a title
+        if len(line.strip()) > 10 and not line.lower().startswith(("abstract", "introduction")):
+            return line.strip()
+    return "Unknown Title"
+
+# Function to extract paper title (assuming title is in the DOI website)
+def get_title_from_doi(doi):
+    url = f"https://api.crossref.org/works/{doi}"
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()  # Raise error for bad responses
+        data = response.json()
+        return data["message"]["title"][0] if "message" in data and "title" in data["message"] else None
+    except Exception as e:
+        print(f"❌ Error fetching title for DOI {doi}: {e}")
+        return None
+
 # Function to split text hierarchically
 def hierarchical_chunking(text):
     # 1️⃣ Split by Headings (Sections)
@@ -31,7 +60,7 @@ def hierarchical_chunking(text):
     sections = re.split(section_pattern, text)
 
     structured_chunks = []
-    
+
     for section in sections:
         # 2️⃣ Split into Paragraphs
         paragraphs = [para.strip() for para in section.split("\n\n") if para.strip()]
@@ -40,7 +69,7 @@ def hierarchical_chunking(text):
             # 3️⃣ Split into Sentences using Punkt Tokenizer
             sentences = punkt_tokenizer.tokenize(para)
             structured_chunks.extend(sentences)
-
+            
     return structured_chunks
 
 # Function to merge sentences based on semantic similarity
@@ -70,11 +99,25 @@ def semantic_chunking(sentences, similarity_threshold=0.75, max_tokens=1024):
 # Function to process a single PDF
 def process_pdf(pdf_path):
     pdf_text = extract_text_from_pdf(pdf_path)
+    
+    # Extract metadata
+    doi = extract_doi(pdf_text)
+    doi_url = f"https://doi.org/{doi}" if doi else None
+    
+    # Fetch title from DOI
+    title = get_title_from_doi(doi) if doi else "Unknown Title"
+
+    # Chunking process
     sentences = hierarchical_chunking(pdf_text)
     final_chunks = semantic_chunking(sentences)
-    
+
     # Add metadata for each chunk
-    chunked_data = [{"paper": os.path.basename(pdf_path), "chunk": chunk} for chunk in final_chunks]
+    chunked_data = [{
+        "file_name": os.path.basename(pdf_path),
+        "paper": title,
+        "doi": doi_url,
+        "chunk": chunk
+    } for chunk in final_chunks]
     
     return chunked_data
 
@@ -86,10 +129,8 @@ def process_new_pdfs(folder_path, output_json=OUTPUT_JSON):
             all_chunks = json.load(f)
     else:
         all_chunks = []
-
     # Get list of already processed papers
-    processed_papers = set(chunk["paper"] for chunk in all_chunks)
-
+    processed_papers = set(chunk["file_name"] for chunk in all_chunks)
     # Get new PDFs
     pdf_files = [f for f in os.listdir(folder_path) if f.endswith(".pdf")]
     new_pdfs = [pdf for pdf in pdf_files if pdf not in processed_papers]
@@ -105,7 +146,6 @@ def process_new_pdfs(folder_path, output_json=OUTPUT_JSON):
         print(f"📄 Processing: {pdf}")
         pdf_chunks = process_pdf(pdf_path)
         all_chunks.extend(pdf_chunks)
-
     # Save updated JSON
     with open(output_json, "w", encoding="utf-8") as f:
         json.dump(all_chunks, f, indent=4, ensure_ascii=False)
