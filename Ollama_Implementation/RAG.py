@@ -71,16 +71,30 @@ def find_related_chunks(query, top_k=5):
     with open(METADATA_PATH, "r", encoding="utf-8") as meta_file:
         metadata = json.load(meta_file)
 
-    results = [metadata[idx]["chunk"] for idx in indices[0] if idx < len(metadata)]
-    return results
+    results = []
+    references = set()  # To store unique paper names
+
+    for idx in indices[0]:
+        if idx < len(metadata):
+            results.append(metadata[idx]["chunk"])
+            references.add(metadata[idx]["paper"])  # Collect paper names
+
+    return results, references
 
 # Function to Generate LLM Response
-def generate_answer(user_query, context_chunks):
+def generate_answer(user_query, context_chunks, references):
     context_text = "\n\n".join(context_chunks)
+    reference_text = "\n".join(f"- {ref}" for ref in references)
+
     conversation_prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
     response_chain = conversation_prompt | LLM_MODEL
 
-    return response_chain.invoke({"user_query": user_query, "document_context": context_text})
+    answer = response_chain.invoke({"user_query": user_query, "document_context": context_text})
+
+    # Append References to Answer
+    answer += f"\n\n📚 **References:**\n{reference_text}"
+    
+    return answer
 
 # 🟢 Streamlit UI
 st.title("📘 Academic RAG - Chatbot")
@@ -103,17 +117,16 @@ if user_query:
     with st.chat_message("user"):
         st.write(user_query)
 
-    # Retrieve relevant chunks
+    # Retrieve relevant chunks & references
     with st.spinner("Retrieving relevant information..."):
-        relevant_chunks = find_related_chunks(user_query, top_k=10)
-        ai_response = generate_answer(user_query, relevant_chunks)
+        relevant_chunks, references = find_related_chunks(user_query, top_k=10)
+        ai_response = generate_answer(user_query, relevant_chunks, references)
 
-     # 🔹 Display Retrieved Chunks
-    with st.expander("🔍 Retrieved Context Chunks (Click to Expand)"):
+     # 🔹 Display Retrieved Chunks with Source Papers
+    with st.expander("🔍 Retrieved Context Chunks (Click to Expand)", expanded=False):
         for idx, chunk in enumerate(relevant_chunks):
-            st.markdown(f"**Chunk {idx + 1}:**")
-            # st.info(chunk)
-            st.code(chunk, language="markdown")
+            st.markdown(f"**Chunk {idx + 1}:** (From `{references}`)")
+            st.info(chunk)
 
     # Display AI response
     with st.chat_message("assistant", avatar="🤖"):
