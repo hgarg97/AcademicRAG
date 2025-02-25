@@ -85,16 +85,32 @@ def generate_answer(user_query, context_chunks):
 st.title("📘 Academic RAG - Chatbot")
 st.markdown("### Ask questions based on indexed research papers!")
 
+# Initialize chat history
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+# Display chat history
+for role, text in st.session_state.chat_history:
+    with st.chat_message(role):
+        st.write(text)
+
 # User Query Input
 user_query = st.chat_input("Enter your research query...")
 
 if user_query:
+    # Display user query
     with st.chat_message("user"):
         st.write(user_query)
 
+    # Retrieve relevant chunks
     with st.spinner("Retrieving relevant information..."):
         relevant_chunks = find_related_chunks(user_query, top_k=10)
         ai_response = generate_answer(user_query, relevant_chunks)
 
+    # Display AI response
     with st.chat_message("assistant", avatar="🤖"):
         st.write(ai_response)
+
+    # Store conversation in history
+    st.session_state.chat_history.append(("user", user_query))
+    st.session_state.chat_history.append(("assistant", ai_response))
