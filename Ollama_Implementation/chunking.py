@@ -1,17 +1,20 @@
 import fitz  # PyMuPDF for PDF text extraction
+import os
 import re
+import json
 import numpy as np
+from nltk.tokenize.punkt import PunktSentenceTokenizer
 from sentence_transformers import SentenceTransformer
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from sklearn.metrics.pairwise import cosine_similarity
-import requests
-from nltk.tokenize import PunktTokenizer
-
-# Initialize Punkt Tokenizer
-punkt_tokenizer  = PunktTokenizer()
 
 # Load Sentence-BERT model
 model = SentenceTransformer("all-MiniLM-L6-v2")
+
+# Load Punkt Sentence Tokenizer
+punkt_tokenizer = PunktSentenceTokenizer()
+
+# JSON file path
+OUTPUT_JSON = "chunked_texts.json"
 
 # Function to extract text from PDFs
 def extract_text_from_pdf(pdf_path):
@@ -21,24 +24,9 @@ def extract_text_from_pdf(pdf_path):
         text += page.get_text("text") + "\n"
     return text.strip()
 
-# If we need nomic embeddings by OLLAMA
-def get_nomic_embeddings(text):
-    url = "http://localhost:11434/api/embeddings"
-    payload = {
-        "model": "nomic-embed-text",
-        "prompt": text
-    }
-    response = requests.post(url, json=payload)
-    return response.json()
-
-# If we need to simple chunking
-def simple_chunking(text, chunk_size=512, overlap=100):
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=overlap)
-    return text_splitter.split_text(text)
-
 # Function to split text hierarchically
 def hierarchical_chunking(text):
-    # 1️⃣ Split by Headings (Sections) - More robust regex
+    # 1️⃣ Split by Headings (Sections)
     section_pattern = re.compile(r'(?m)^(Abstract|Introduction|Methods?|Results?|Discussion|Conclusion|References)\b.*$', re.IGNORECASE)
     sections = re.split(section_pattern, text)
 
@@ -56,7 +44,7 @@ def hierarchical_chunking(text):
     return structured_chunks
 
 # Function to merge sentences based on semantic similarity
-def semantic_chunking(sentences, similarity_threshold=0.75, max_tokens=512):
+def semantic_chunking(sentences, similarity_threshold=0.75, max_tokens=1024):
     chunks = []
     current_chunk = []
     token_count = 0
@@ -79,14 +67,51 @@ def semantic_chunking(sentences, similarity_threshold=0.75, max_tokens=512):
 
     return chunks
 
-# Example usage
-pdf_text = extract_text_from_pdf("G:/AcademicRAG/Subdataset/143-Kofler-2023.pdf")
-sentences = hierarchical_chunking(pdf_text)
-final_chunks = semantic_chunking(sentences, max_tokens= 1024)
+# Function to process a single PDF
+def process_pdf(pdf_path):
+    pdf_text = extract_text_from_pdf(pdf_path)
+    sentences = hierarchical_chunking(pdf_text)
+    final_chunks = semantic_chunking(sentences)
+    
+    # Add metadata for each chunk
+    chunked_data = [{"paper": os.path.basename(pdf_path), "chunk": chunk} for chunk in final_chunks]
+    
+    return chunked_data
 
-# Save chunks for embedding
-with open("chunked_texts.txt", "w", encoding="utf-8") as f:
-    for chunk in final_chunks:
-        f.write(chunk + "\n\n")
+# Function to process new PDFs only and update JSON
+def process_new_pdfs(folder_path, output_json=OUTPUT_JSON):
+    # Load existing data
+    if os.path.exists(output_json):
+        with open(output_json, "r", encoding="utf-8") as f:
+            all_chunks = json.load(f)
+    else:
+        all_chunks = []
 
-print(f"✅ Chunking completed! {len(final_chunks)} chunks created.")
+    # Get list of already processed papers
+    processed_papers = set(chunk["paper"] for chunk in all_chunks)
+
+    # Get new PDFs
+    pdf_files = [f for f in os.listdir(folder_path) if f.endswith(".pdf")]
+    new_pdfs = [pdf for pdf in pdf_files if pdf not in processed_papers]
+
+    if not new_pdfs:
+        print("✅ No new PDFs to process. Everything is up-to-date.")
+        return
+
+    print(f"📂 Found {len(new_pdfs)} new PDFs to process.")
+
+    for pdf in new_pdfs:
+        pdf_path = os.path.join(folder_path, pdf)
+        print(f"📄 Processing: {pdf}")
+        pdf_chunks = process_pdf(pdf_path)
+        all_chunks.extend(pdf_chunks)
+
+    # Save updated JSON
+    with open(output_json, "w", encoding="utf-8") as f:
+        json.dump(all_chunks, f, indent=4, ensure_ascii=False)
+
+    print(f"✅ Processing completed! {len(new_pdfs)} new PDFs added.")
+
+# Usage
+folder_path = "G:/AcademicRAG/Subdataset/"
+process_new_pdfs(folder_path)
