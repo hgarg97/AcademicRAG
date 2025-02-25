@@ -9,4 +9,4 @@ nltk
 scikit-learn
 numpy
 requests
-faiss
+faiss-cpu

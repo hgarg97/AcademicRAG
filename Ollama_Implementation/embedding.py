@@ -97,7 +97,7 @@ def search_faiss(query, top_k=5):
     with open(METADATA_PATH, "r", encoding="utf-8") as f:
         metadata = json.load(f)
 
-    results = [{"chunk": metadata[i]["chunk"], "file": metadata[i]["file_name"], "score": D[0][j]}
+    results = [{"chunk": metadata[i]["chunk"], "file": metadata[i]["paper"], "score": D[0][j]}
                for j, i in enumerate(I[0])]
 
     return results
