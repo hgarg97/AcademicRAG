@@ -54,6 +54,7 @@ def build_faiss_index():
     print("✅ FAISS index built and saved.")
 
 # Function to Load FAISS Index
+@st.cache_resource
 def load_faiss_index():
     if not os.path.exists(FAISS_INDEX_PATH):
         build_faiss_index()
@@ -106,6 +107,13 @@ if user_query:
     with st.spinner("Retrieving relevant information..."):
         relevant_chunks = find_related_chunks(user_query, top_k=10)
         ai_response = generate_answer(user_query, relevant_chunks)
+
+     # 🔹 Display Retrieved Chunks
+    with st.expander("🔍 Retrieved Context Chunks (Click to Expand)"):
+        for idx, chunk in enumerate(relevant_chunks):
+            st.markdown(f"**Chunk {idx + 1}:**")
+            # st.info(chunk)
+            st.code(chunk, language="markdown")
 
     # Display AI response
     with st.chat_message("assistant", avatar="🤖"):
