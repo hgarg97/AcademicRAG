@@ -72,12 +72,14 @@ def find_related_chunks(query, top_k=5):
         metadata = json.load(meta_file)
 
     results = []
-    references = set()  # To store unique paper names
+    references = set()
 
     for idx in indices[0]:
         if idx < len(metadata):
             results.append(metadata[idx]["chunk"])
-            references.add(metadata[idx]["paper"])  # Collect paper names
+            paper_info = metadata[idx]["paper"]
+            doi = metadata[idx].get("doi", "DOI not available")
+            references.add(f"{paper_info} (DOI: {doi})")
 
     return results, references
 

@@ -15,7 +15,6 @@ os.makedirs("vector_store", exist_ok=True)
 # Load embedding model
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")  # Change if needed
 
-
 # Function to load chunked texts
 def load_chunked_texts():
     if not os.path.exists(CHUNKED_TEXTS_PATH):
@@ -25,17 +24,14 @@ def load_chunked_texts():
     with open(CHUNKED_TEXTS_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
-
 # Function to generate embeddings
 def generate_embeddings(texts):
-    return embedding_model.encode(texts, convert_to_numpy=True)
-
+    return embedding_model.encode(texts, convert_to_numpy=True, show_progress_bar=True)
 
 # Function to initialize FAISS index
 def initialize_faiss(embedding_dim):
     index = faiss.IndexFlatL2(embedding_dim)
     return index
-
 
 # Function to process and store embeddings
 def process_embeddings():
@@ -51,20 +47,15 @@ def process_embeddings():
             metadata = json.load(f)
 
     existing_chunks = {entry["chunk"] for entry in metadata}
-
-    new_chunks = []
-    for entry in chunked_data:
-        chunk_text = entry["chunk"]
-        if chunk_text not in existing_chunks:
-            new_chunks.append(chunk_text)
-            metadata.append(entry)
+    new_chunks = [entry for entry in chunked_data if entry["chunk"] not in existing_chunks]
 
     if not new_chunks:
         print("✅ No new chunks to process. FAISS is up-to-date.")
         return
 
     # Generate embeddings for new chunks
-    new_embeddings = generate_embeddings(new_chunks)
+    new_texts = [entry["chunk"] for entry in new_chunks]
+    new_embeddings = generate_embeddings(new_texts)
     new_embeddings = np.array(new_embeddings)
 
     # Initialize FAISS or load existing index
@@ -77,11 +68,11 @@ def process_embeddings():
     faiss.write_index(index, VECTOR_STORE_PATH)
 
     # Save updated metadata
+    metadata.extend(new_chunks)
     with open(METADATA_PATH, "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=4)
 
     print(f"✅ Processed {len(new_chunks)} new embeddings and updated FAISS!")
-
 
 # Function to search FAISS for relevant chunks
 def search_faiss(query, top_k=5):
@@ -98,16 +89,14 @@ def search_faiss(query, top_k=5):
         metadata = json.load(f)
 
     results = [{"chunk": metadata[i]["chunk"], "file": metadata[i]["paper"], "score": D[0][j]}
-               for j, i in enumerate(I[0])]
+               for j, i in enumerate(I[0]) if i < len(metadata)]
 
     return results
-
 
 if __name__ == "__main__":
     process_embeddings()
 
     # Example search
-    query_text = '''In the paper "Characterization of presence and activity of microRNAs in the rumen of cattle hints at possible host‑microbiota
-cross‑talk mechanism" whaT was the Network analysis and functional prediction'''
+    query_text = "In the paper 'Characterization of presence and activity of microRNAs in the rumen of cattle' what was the Network analysis and functional prediction?"
     retrieved_chunks = search_faiss(query_text)
     print("\n🔍 Search Results:\n", retrieved_chunks)
