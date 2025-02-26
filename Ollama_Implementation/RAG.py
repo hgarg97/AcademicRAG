@@ -73,19 +73,26 @@ def find_related_chunks(query, top_k=5):
 
     results = []
     references = set()
+    unique_files = set()
 
     for idx in indices[0]:
         if idx < len(metadata):
-            results.append(metadata[idx]["chunk"])
+            chunk_text = metadata[idx]["chunk"]
             paper_info = metadata[idx]["paper"]
+            file_name = metadata[idx].get("file_name", None)  # Get filename
             doi = metadata[idx].get("doi", "DOI not available")
+
+            results.append((chunk_text, file_name))  # Store chunk + filename
             references.add(f"{paper_info} (DOI: {doi})")
 
-    return results, references
+            if file_name:
+                unique_files.add(file_name)  # Track unique filenames
+
+    return results, references, list(unique_files)
 
 # Function to Generate LLM Response
 def generate_answer(user_query, context_chunks, references):
-    context_text = "\n\n".join(context_chunks)
+    context_text = "\n\n".join(chunk[0] for chunk in context_chunks)
     reference_text = "\n".join(f"- {ref}" for ref in references)
 
     conversation_prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
@@ -121,14 +128,19 @@ if user_query:
 
     # Retrieve relevant chunks & references
     with st.spinner("Retrieving relevant information..."):
-        relevant_chunks, references = find_related_chunks(user_query, top_k=10)
-        ai_response = generate_answer(user_query, relevant_chunks, references)
+        retrieved_chunks, references, unique_files = find_related_chunks(user_query, top_k=10)
+        ai_response = generate_answer(user_query, retrieved_chunks, references)
 
-     # 🔹 Display Retrieved Chunks with Source Papers
-    with st.expander("🔍 Retrieved Context Chunks (Click to Expand)", expanded=False):
-        for idx, chunk in enumerate(relevant_chunks):
-            st.markdown(f"**Chunk {idx + 1}:** (From `{references}`)")
+    # 🔹 Display Retrieved Chunks with Source Papers
+    with st.expander("🔍 Retrieved Context Chunks (Click to Expand)"):
+        for idx, (chunk, file_name) in enumerate(retrieved_chunks):
+            st.markdown(f"**Chunk {idx + 1}:**")
             st.info(chunk)
+
+    with st.expander("📂 Source Papers (Click to Expand)"):
+        for file_name in unique_files:
+            pdf_path = f"G:/AcademicRAG/Subdataset/{file_name}"
+            st.markdown(f"[📄 {file_name}]({pdf_path})", unsafe_allow_html=True)
 
     # Display AI response
     with st.chat_message("assistant", avatar="🤖"):
