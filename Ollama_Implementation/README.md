@@ -1,89 +1,81 @@
-# Academic RAG - Ollama Implementation
+# Retrieval-Augmented Generation (RAG) Chatbot for Research Papers
 
-## Overview
-
-The **Academic RAG (Retrieval-Augmented Generation)** system is a research assistant powered by **Ollama**, designed to help researchers efficiently extract relevant insights from uploaded **PDF research papers**. This system processes academic documents, indexes their contents into an **in-memory vector store**, and enables users to query information interactively. It provides factual, context-aware responses using **large language models (LLMs)**.
-
-### Key Features:
-
-- **PDF Upload & Processing**: Extracts and segments content from uploaded research PDFs.
-- **Vector Search for Context Retrieval**: Utilizes **Ollama embeddings** to store and retrieve relevant document sections.
-- **LLM-powered Responses**: Uses **Llama 3.2** to generate concise, research-focused answers.
-- **Streamlit UI**: A simple, interactive web interface for seamless user interaction.
+This project implements a **Retrieval-Augmented Generation (RAG) chatbot** that allows users to query research papers efficiently. It extracts text from **PDFs**, processes them into **chunks**, generates **vector embeddings**, stores them in a **FAISS index**, and retrieves relevant information using **Llama 3.2 (via Ollama)** for answering research-related questions.
 
 ---
 
-## Setup & Installation
+## **Project Workflow**
 
-### 1️⃣ Prerequisites
+### **1️⃣ chunking.py (PDF Processing & Text Chunking)**
 
-Ensure your system has:
+**Purpose:** Extracts text from **PDF research papers** and breaks it into **smaller chunks** for efficient retrieval.
 
-- **Python 3.9+** installed
-- **Ollama** installed for running LLM models
+**Logic Flow:**
 
-### 2️⃣ Install Ollama
-
-Ollama is required to run **Llama3.2** and **nomic-embed-text** models locally.
-
-#### Install Ollama:
-
-```sh
-curl -fsSL https://ollama.com/install.sh | sh
-```
-
-For Windows users, download and install Ollama from [here](https://ollama.com/download).
-
-### 3️⃣ Install Required Python Packages
-
-Navigate to the **Ollama_Implementation** folder and run:
-
-```sh
-pip install -r requirements.txt
-```
-
-This will install the necessary dependencies:
-
-- **streamlit** (for UI)
-- **langchain** components (for document processing and retrieval)
-- **pdfplumber** (for PDF parsing)
-- **ollama** LLM and embedding models
-
-### 4️⃣ Download and Run Models
-
-#### Pull the Required Models in Ollama:
-
-```sh
-ollama pull nomic-embed-text:latest
-ollama pull llama3.2:latest
-```
-
-This ensures the embedding and LLM models are available for use.
+- **Load PDFs**: Extracts text using `pdfplumber`.
+- **Chunking the Text**: Splits text into **semantic chunks**, ensuring sentences remain intact.
+- **Metadata Storage**: Saves each chunk with metadata (filename, title, DOI, etc.) in `chunked_texts.json`.
 
 ---
 
-## Running the Application
+### **2️⃣ embedding.py (Generating Vector Embeddings & Storing in FAISS)**
 
-1️⃣ Navigate to the **Ollama_Implementation** folder:
+**Purpose:** Converts text chunks into **vector embeddings** and stores them in a **FAISS index** for fast retrieval.
 
-```sh
-cd path/to/Ollama_Implementation
-```
+**Logic Flow:**
 
-2️⃣ Start the Streamlit application:
-
-```sh
-streamlit run UploadPDF_RAG.py
-```
-
-3️⃣ Open the provided **localhost URL** in your browser and begin uploading PDFs to query academic insights.
+- **Load Chunked Data**: Reads `chunked_texts.json`.
+- **Convert Text to Embeddings**: Uses `sentence-transformers` (`all-MiniLM-L6-v2`) to generate **dense vector embeddings**.
+- **Build FAISS Index**: Stores embeddings in FAISS and saves them in `faiss_index.index`.
+- **Save Metadata**: Maps embeddings to their original text in `metadata.json`.
 
 ---
 
-## How It Works
+### **3️⃣ RAG.py (Retrieval-Augmented Generation Chatbot)**
 
-1. **Upload a research paper (PDF).**
-2. The document is **chunked and stored** using **Ollama embeddings**.
-3. When a user asks a question, the system retrieves **relevant document sections** using **vector similarity search**.
-4. The retrieved text is passed into **Llama 3.2**, which generates an accurate and concise answer.
-5. The response is displayed in an interactive chat format.
+**Purpose:** Implements a **RAG-based chatbot** that retrieves relevant research text chunks from FAISS and **generates answers using Llama 3.2**.
+
+**Logic Flow:**
+
+- **Load FAISS Index & Metadata**: Reads `faiss_index.index` and `metadata.json`.
+- **User Query Processing**: Accepts a research question from the user via **Streamlit UI**.
+- **Retrieve Relevant Chunks**: Embeds the user query, searches FAISS, and fetches **top-k relevant chunks**.
+- **Generate AI Answer**: Uses **Llama 3.2 (via Ollama)** to generate a concise answer with references.
+- **Streamlit UI**: Displays retrieved chunks, source PDFs, and AI-generated responses interactively.
+
+---
+
+## **How to Run**
+
+1. **Install Dependencies:**
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Run Chunking Script:**
+
+   ```bash
+   python chunking.py
+   ```
+
+3. **Run Embedding Script:**
+
+   ```bash
+   python embedding.py
+   ```
+
+4. **Start the RAG Chatbot:**
+   ```bash
+   streamlit run RAG.py
+   ```
+
+---
+
+## **Summary**
+
+- **chunking.py** → Extracts text from PDFs and creates small **semantic chunks**.
+- **embedding.py** → Converts chunks into **vector embeddings** and stores them in **FAISS**.
+- **RAG.py** → Implements the **RAG chatbot**, retrieving relevant chunks & generating **AI-powered answers**.
+
+This system provides a **fast and accurate research assistant** to help users query thousands of academic papers efficiently. 🚀
