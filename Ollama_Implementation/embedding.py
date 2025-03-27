@@ -4,99 +4,61 @@ import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-# Define file paths
-CHUNKED_TEXTS_PATH = "chunked_texts.json"
-VECTOR_STORE_PATH = "vector_store/faiss_index.index"
-METADATA_PATH = "vector_store/metadata.json"
+class FAISSManager:
+    def __init__(self, chunked_path="chunked_texts.json", vector_path="vector_store/faiss_index.index", meta_path="vector_store/metadata.json"):
+        self.chunked_path = chunked_path
+        self.vector_path = vector_path
+        self.meta_path = meta_path
+        self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+        os.makedirs(os.path.dirname(self.vector_path), exist_ok=True)
 
-# Ensure vector store directory exists
-os.makedirs("vector_store", exist_ok=True)
+    def load_chunked_texts(self):
+        if not os.path.exists(self.chunked_path):
+            print("❌ No chunked texts found! Run chunking.py first.")
+            return []
+        with open(self.chunked_path, "r", encoding="utf-8") as f:
+            return json.load(f)
 
-# Load embedding model
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")  # Change if needed
+    def generate_embeddings(self, texts):
+        return self.embedding_model.encode(texts, convert_to_numpy=True, show_progress_bar=True)
 
-# Function to load chunked texts
-def load_chunked_texts():
-    if not os.path.exists(CHUNKED_TEXTS_PATH):
-        print("❌ No chunked texts found! Run chunking.py first.")
-        return []
+    def initialize_faiss(self, embedding_dim):
+        return faiss.IndexFlatL2(embedding_dim)
 
-    with open(CHUNKED_TEXTS_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+    def process_embeddings(self):
+        chunked_data = self.load_chunked_texts()
+        if not chunked_data:
+            return
+        metadata = []
+        if os.path.exists(self.meta_path):
+            with open(self.meta_path, "r", encoding="utf-8") as f:
+                metadata = json.load(f)
+        existing_chunks = {entry["chunk"] for entry in metadata}
+        new_chunks = [entry for entry in chunked_data if entry["chunk"] not in existing_chunks]
+        if not new_chunks:
+            print("✅ No new chunks to process. FAISS is up-to-date.")
+            return
+        new_texts = [entry["chunk"] for entry in new_chunks]
+        new_embeddings = self.generate_embeddings(new_texts)
+        new_embeddings = np.array(new_embeddings)
+        if os.path.exists(self.vector_path):
+            index = faiss.read_index(self.vector_path)
+        else:
+            index = self.initialize_faiss(new_embeddings.shape[1])
+        index.add(new_embeddings)
+        faiss.write_index(index, self.vector_path)
+        metadata.extend(new_chunks)
+        with open(self.meta_path, "w", encoding="utf-8") as f:
+            json.dump(metadata, f, indent=4)
+        print(f"✅ Processed {len(new_chunks)} new embeddings and updated FAISS!")
 
-# Function to generate embeddings
-def generate_embeddings(texts):
-    return embedding_model.encode(texts, convert_to_numpy=True, show_progress_bar=True)
-
-# Function to initialize FAISS index
-def initialize_faiss(embedding_dim):
-    index = faiss.IndexFlatL2(embedding_dim)
-    return index
-
-# Function to process and store embeddings
-def process_embeddings():
-    # Load chunked text data
-    chunked_data = load_chunked_texts()
-    if not chunked_data:
-        return
-
-    # Load existing metadata if available
-    metadata = []
-    if os.path.exists(METADATA_PATH):
-        with open(METADATA_PATH, "r", encoding="utf-8") as f:
+    def search_faiss(self, query, top_k=5):
+        query_embedding = self.embedding_model.encode([query], convert_to_numpy=True)
+        if not os.path.exists(self.vector_path):
+            print("❌ No FAISS index found. Run embedding.py first.")
+            return []
+        index = faiss.read_index(self.vector_path)
+        D, I = index.search(query_embedding, top_k)
+        with open(self.meta_path, "r", encoding="utf-8") as f:
             metadata = json.load(f)
-
-    existing_chunks = {entry["chunk"] for entry in metadata}
-    new_chunks = [entry for entry in chunked_data if entry["chunk"] not in existing_chunks]
-
-    if not new_chunks:
-        print("✅ No new chunks to process. FAISS is up-to-date.")
-        return
-
-    # Generate embeddings for new chunks
-    new_texts = [entry["chunk"] for entry in new_chunks]
-    new_embeddings = generate_embeddings(new_texts)
-    new_embeddings = np.array(new_embeddings)
-
-    # Initialize FAISS or load existing index
-    if os.path.exists(VECTOR_STORE_PATH):
-        index = faiss.read_index(VECTOR_STORE_PATH)
-    else:
-        index = initialize_faiss(new_embeddings.shape[1])
-
-    index.add(new_embeddings)
-    faiss.write_index(index, VECTOR_STORE_PATH)
-
-    # Save updated metadata
-    metadata.extend(new_chunks)
-    with open(METADATA_PATH, "w", encoding="utf-8") as f:
-        json.dump(metadata, f, indent=4)
-
-    print(f"✅ Processed {len(new_chunks)} new embeddings and updated FAISS!")
-
-# Function to search FAISS for relevant chunks
-def search_faiss(query, top_k=5):
-    query_embedding = embedding_model.encode([query], convert_to_numpy=True)
-
-    if not os.path.exists(VECTOR_STORE_PATH):
-        print("❌ No FAISS index found. Run embedding.py first.")
-        return []
-
-    index = faiss.read_index(VECTOR_STORE_PATH)
-    D, I = index.search(query_embedding, top_k)
-
-    with open(METADATA_PATH, "r", encoding="utf-8") as f:
-        metadata = json.load(f)
-
-    results = [{"chunk": metadata[i]["chunk"], "file": metadata[i]["paper"], "score": D[0][j]}
-               for j, i in enumerate(I[0]) if i < len(metadata)]
-
-    return results
-
-if __name__ == "__main__":
-    process_embeddings()
-
-    # Example search
-    query_text = "In the paper 'Characterization of presence and activity of microRNAs in the rumen of cattle' what was the Network analysis and functional prediction?"
-    retrieved_chunks = search_faiss(query_text)
-    print("\n🔍 Search Results:\n", retrieved_chunks)
+        return [{"chunk": metadata[i]["chunk"], "file": metadata[i]["paper"], "score": D[0][j]} for j, i in enumerate(I[0]) if i < len(metadata)]
