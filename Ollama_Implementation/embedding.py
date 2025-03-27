@@ -3,13 +3,14 @@ import json
 import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
+import config
 
 class FAISSManager:
-    def __init__(self, chunked_path="chunked_texts.json", vector_path="vector_store/faiss_index.index", meta_path="vector_store/metadata.json"):
+    def __init__(self, chunked_path=config.CHUNKED_JSON_PATH, vector_path=config.FAISS_INDEX_PATH, meta_path=config.METADATA_PATH):
         self.chunked_path = chunked_path
         self.vector_path = vector_path
         self.meta_path = meta_path
-        self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+        self.embedding_model = SentenceTransformer(config.EMBEDDING_MODEL_NAME)
         os.makedirs(os.path.dirname(self.vector_path), exist_ok=True)
 
     def load_chunked_texts(self):
@@ -58,7 +59,7 @@ class FAISSManager:
             print("❌ No FAISS index found. Run embedding.py first.")
             return []
         index = faiss.read_index(self.vector_path)
-        D, I = index.search(query_embedding, top_k)
         with open(self.meta_path, "r", encoding="utf-8") as f:
             metadata = json.load(f)
+        D, I = index.search(query_embedding, top_k)
         return [{"chunk": metadata[i]["chunk"], "file": metadata[i]["paper"], "score": D[0][j]} for j, i in enumerate(I[0]) if i < len(metadata)]

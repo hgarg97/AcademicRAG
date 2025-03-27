@@ -1,19 +1,20 @@
 import os
 import json
 import faiss
-from sentence_transformers import SentenceTransformer
 import streamlit as st
+from sentence_transformers import SentenceTransformer
 from langchain_ollama.llms import OllamaLLM
 from langchain_core.prompts import ChatPromptTemplate
 from embedding import FAISSManager
+import config
 
 class AcademicRAG:
     def __init__(self):
-        self.chunked_path = "chunked_texts.json"
-        self.faiss_path = "vector_store/faiss_index.index"
-        self.metadata_path = "vector_store/metadata.json"
-        self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-        self.llm = OllamaLLM(model="llama3.2:latest")
+        self.chunked_path = config.CHUNKED_JSON_PATH
+        self.faiss_path = config.FAISS_INDEX_PATH
+        self.metadata_path = config.METADATA_PATH
+        self.embedding_model = SentenceTransformer(config.EMBEDDING_MODEL_NAME)
+        self.llm = OllamaLLM(model=config.LLM_MODEL_NAME)
         self.prompt_template = ChatPromptTemplate.from_template("""
         You are an expert research assistant with knowledge of Animal Science Research.
         Use the provided context to answer the query. If unsure, say you don't know.
@@ -25,6 +26,8 @@ class AcademicRAG:
         """)
 
     def load_faiss_index(self):
+        vector_dir = os.path.dirname(self.faiss_path)
+        os.makedirs(vector_dir, exist_ok=True)
         if not os.path.exists(self.faiss_path):
             FAISSManager().process_embeddings()
         return faiss.read_index(self.faiss_path)
@@ -78,7 +81,7 @@ class AcademicRAG:
             with st.spinner("Retrieving relevant information..."):
                 chunks, refs, files = self.find_related_chunks(user_query, top_k=10)
                 response = self.generate_answer(user_query, chunks, refs)
-
+            
             # 🔹 Display Retrieved Chunks with Source Papers
             with st.expander("🔍 Retrieved Context Chunks (Click to Expand)"):
                 for idx, (chunk, file) in enumerate(chunks):
@@ -86,13 +89,13 @@ class AcademicRAG:
                     st.info(chunk)
             with st.expander("📂 Source Papers (Click to Expand)"):
                 for file in files:
-                    path = f"G:/AcademicRAG/Subdataset/{file}"
+                    path = f"{config.RAW_PDF_DIR}/{file}"
                     st.markdown(f"[📄 {file}]({path})", unsafe_allow_html=True)
-
+            
             # Display AI response
             with st.chat_message("assistant", avatar="🤖"):
                 st.write(response)
-
+            
             # Store conversation in history
             st.session_state.chat_history.append(("user", user_query))
             st.session_state.chat_history.append(("assistant", response))

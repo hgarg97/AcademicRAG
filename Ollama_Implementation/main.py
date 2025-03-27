@@ -4,38 +4,32 @@
 # To Launch the Chatbot
 # streamlit run main.py -- --mode chatbot
 
-
 import argparse
 from chunking import PDFChunker
 from embedding import FAISSManager
 from RAG import AcademicRAG
-# from bm25_module import BM25Retriever  # Optional if you add BM25 support
-
-# File paths
-RAW_PDF_DIR = "G:/AcademicRAG/Subdataset/"
-CHUNKED_JSON_PATH = "chunked_texts.json"
-FAISS_INDEX_PATH = "vector_store/faiss_index.index"
-# BM25_INDEX_PATH = "vector_store/bm25_index.pkl"
+import config
 
 def run_preprocessing():
     print("🔄 Starting Preprocessing Pipeline...")
 
     # Step 1: Chunk PDFs
-    chunker = PDFChunker(output_json=CHUNKED_JSON_PATH)
-    chunker.process_new_pdfs(RAW_PDF_DIR)
+    chunker = PDFChunker(output_json=config.CHUNKED_JSON_PATH)
+    chunker.process_new_pdfs(config.RAW_PDF_DIR)
     print("✅ Chunking completed!")
 
     # Step 2: FAISS embedding
     embedder = FAISSManager(
-        chunked_path=CHUNKED_JSON_PATH,
-        vector_path=FAISS_INDEX_PATH
+        chunked_path=config.CHUNKED_JSON_PATH,
+        vector_path=config.FAISS_INDEX_PATH,
+        meta_path=config.METADATA_PATH
     )
     embedder.process_embeddings()
     print("✅ FAISS Indexing completed!")
 
     # Step 3: Optional BM25 indexing
     # retriever = BM25Retriever()
-    # retriever.build_index(CHUNKED_JSON_PATH, BM25_INDEX_PATH)
+    # retriever.build_index(config.CHUNKED_JSON_PATH, config.BM25_INDEX_PATH)
     # print("✅ BM25 Indexing completed!")
 
     print("🚀 Preprocessing Completed! Ready for Retrieval.")

@@ -1,16 +1,17 @@
-import fitz
 import os
 import re
 import json
+import fitz
 import numpy as np
+import requests
 from nltk.tokenize.punkt import PunktSentenceTokenizer
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-import requests
+import config
 
 class PDFChunker:
-    def __init__(self, output_json="chunked_texts.json"):
-        self.model = SentenceTransformer("all-MiniLM-L6-v2")
+    def __init__(self, output_json=config.CHUNKED_JSON_PATH):
+        self.model = SentenceTransformer(config.EMBEDDING_MODEL_NAME)
         self.tokenizer = PunktSentenceTokenizer()
         self.output_json = output_json
         self.doi_pattern = r"10\.\d{4,9}/\S*[^.\s]"
@@ -79,7 +80,6 @@ class PDFChunker:
 
     def process_pdf(self, pdf_path):
         text = self.extract_text_from_pdf(pdf_path)
-
         # Extract metadata
         doi = self.extract_doi(text)
         title = self.get_title_from_doi(doi) if doi else "Unknown Title"
