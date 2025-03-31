@@ -7,12 +7,15 @@ from langchain_ollama.llms import OllamaLLM
 from langchain_core.prompts import ChatPromptTemplate
 from embedding import FAISSManager
 import config
+from bm25 import BM25Retriever
 
 class AcademicRAG:
-    def __init__(self):
+    def __init__(self, retriever_mode="faiss"):
         self.chunked_path = config.CHUNKED_JSON_PATH
         self.faiss_path = config.FAISS_INDEX_PATH
         self.metadata_path = config.METADATA_PATH
+        self.retriever_mode = retriever_mode
+        self.bm25 = BM25Retriever() if retriever_mode in ["bm25", "hybrid"] else None
         self.embedding_model = SentenceTransformer(config.EMBEDDING_MODEL_NAME)
         self.llm = OllamaLLM(model=config.LLM_MODEL_NAME)
         self.prompt_template = ChatPromptTemplate.from_template("""
@@ -33,23 +36,36 @@ class AcademicRAG:
         return faiss.read_index(self.faiss_path)
 
     def find_related_chunks(self, query, top_k=5):
-        index = self.load_faiss_index()
-        query_embedding = self.embedding_model.encode([query], convert_to_numpy=True)
-        distances, indices = index.search(query_embedding, top_k)
-        with open(self.metadata_path, "r", encoding="utf-8") as f:
-            metadata = json.load(f)
         results, references, files = [], set(), set()
-        for idx in indices[0]:
-            if idx < len(metadata):
-                chunk = metadata[idx]["chunk"]
-                file = metadata[idx].get("file_name")
-                paper = metadata[idx]["paper"]
-                doi = metadata[idx].get("doi", "DOI not available")
-                results.append((chunk, file))
-                references.add(f"{paper} (DOI: {doi})")
-                if file:
-                    files.add(file)
-        return results, references, list(files)
+
+        if self.retriever_mode in ["faiss", "hybrid"]:
+            faiss_index = self.load_faiss_index()
+            query_embedding = self.embedding_model.encode([query], convert_to_numpy=True)
+            distances, indices = faiss_index.search(query_embedding, top_k)
+            with open(self.metadata_path, "r", encoding="utf-8") as f:
+                metadata = json.load(f)
+            for idx in indices[0]:
+                if idx < len(metadata):
+                    results.append((metadata[idx]["chunk"], metadata[idx].get("file_name")))
+                    references.add(f"{metadata[idx]['paper']} (DOI: {metadata[idx].get('doi', 'N/A')})")
+                    files.add(metadata[idx].get("file_name"))
+
+        if self.retriever_mode in ["bm25", "hybrid"] and self.bm25:
+            bm25_chunks = self.bm25.search(query, top_k=top_k)
+            for chunk in bm25_chunks:
+                results.append((chunk["chunk"], chunk["file_name"]))
+                references.add(f"{chunk['paper']} (DOI: {chunk.get('doi', 'N/A')})")
+                files.add(chunk["file_name"])
+
+        # Deduplicate results by chunk text
+        seen = set()
+        deduped = []
+        for r in results:
+            if r[0] not in seen:
+                deduped.append(r)
+                seen.add(r[0])
+
+        return deduped[:top_k], references, list(files)
 
     def generate_answer(self, query, chunks, references):
         context = "\n\n".join(chunk[0] for chunk in chunks)

@@ -10,3 +10,4 @@ scikit-learn
 numpy
 requests
 faiss-cpu
+rank_bm25

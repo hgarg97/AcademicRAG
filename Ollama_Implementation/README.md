@@ -1,115 +1,169 @@
-# 🧠 Retrieval-Augmented Generation (RAG) Chatbot for Research Papers
+# 🧠 Retrieval-Augmented Generation (RAG) Chatbot for Academic PDFs
 
-This project implements a modular **Retrieval-Augmented Generation (RAG) chatbot** designed to help researchers query large collections of academic PDFs. It uses **FAISS** for vector similarity search and **LLaMA 3.2 (via Ollama)** to generate contextual answers from relevant research papers.
+This project is a fully modular, class-based **RAG (Retrieval-Augmented Generation) system** that allows you to query a collection of academic **PDFs** and get contextual answers using **LLaMA 3.2 via Ollama**.
+
+It integrates:
+
+- Document preprocessing and intelligent **chunking**
+- **Dense vector search (FAISS)** for semantic retrieval
+- Optional **sparse keyword search (BM25)** for exact match queries
+- A **Streamlit chatbot** interface powered by LLMs
 
 ---
 
-## 📐 Project Architecture
+## 🚦 End-to-End Workflow Overview
 
-```text
-📂 data/
-├── raw_texts/ (or G:/AcademicRAG/Subdataset/)
-├── chunked_texts.json
-├── vector_store/
-│   ├── faiss_index.index
-│   └── metadata.json
-
-🧠 Components:
-- 📄 chunking.py → PDF text extraction + semantic chunking
-- 📈 embedding.py → Sentence embeddings + FAISS vector index
-- 🤖 RAG.py → Query interface (Streamlit) + LLM (Llama3.2 via Ollama)
-- 🧩 config.py → Central configuration for paths and models
-- 🚀 main.py → CLI entrypoint to run pipeline or chatbot
+```mermaid
+graph TD;
+    A[PDFs] --> B[Chunking: chunking.py];
+    B --> C[Vector Embeddings: embedding.py];
+    B --> D[BM25 Indexing (optional): bm25.py];
+    C --> E[FAISS Index];
+    D --> E2[BM25 Index];
+    E --> F[Chatbot Query: RAG.py];
+    E2 --> F;
+    F --> G[Answer via LLaMA 3.2 (Ollama)];
 ```
 
 ---
 
-## 🔄 Workflow Overview
+## 📂 Folder Structure & Key Files
 
-### 1️⃣ `chunking.py` — PDF Parsing & Semantic Chunking
-
-- Extracts full text from PDFs using `PyMuPDF`.
-- Performs hierarchical + semantic chunking.
-- Stores the result in `chunked_texts.json`.
-
-### 2️⃣ `embedding.py` — Vector Embeddings + FAISS
-
-- Reads chunked data from JSON.
-- Generates dense vectors using `sentence-transformers` (MiniLM).
-- Saves vectors in a FAISS index (`vector_store/faiss_index.index`) and stores mapping info in `metadata.json`.
-
-### 3️⃣ `RAG.py` — Streamlit Chatbot with LLaMA 3.2
-
-- Loads FAISS and metadata to retrieve relevant chunks based on query.
-- Uses `langchain + Ollama` to query LLaMA 3.2 for concise answers.
-- Includes a Streamlit UI that shows:
-  - User questions
-  - Retrieved chunks
-  - Source PDFs
-  - AI-generated answers
-
-### 4️⃣ `config.py` — Centralized Configuration
-
-- Contains:
-  - All directory/file paths
-  - Embedding model and LLM names
-- Used in every component to keep things modular and easy to maintain.
+| File            | Purpose                                          |
+| --------------- | ------------------------------------------------ |
+| `chunking.py`   | Extract and intelligently chunk PDF text         |
+| `embedding.py`  | Create vector embeddings using MiniLM            |
+| `bm25.py`       | Create a sparse keyword search index             |
+| `RAG.py`        | RAG chatbot logic with retriever + LLM           |
+| `config.py`     | Centralized config for paths and model names     |
+| `main.py`       | Unified CLI for preprocessing and chatbot launch |
+| `vector_store/` | Stores FAISS + BM25 indexes and metadata         |
 
 ---
 
-## ▶️ How to Run
+## 🚀 How to Use
 
-### 1. Install Dependencies
+### ✅ 1. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Preprocess PDFs (Extract, Chunk, Embed)
+---
+
+### 🧱 2. Preprocess the PDFs
+
+This step:
+
+- Reads all PDFs
+- Chunks their text
+- Generates embeddings for semantic retrieval (FAISS)
+- (Optional) Creates BM25 index for exact keyword search
+
+#### ➤ Run FAISS-only pipeline:
 
 ```bash
 python main.py --mode preprocess
 ```
 
-### 3. Launch the Chatbot
+#### ➤ Run FAISS + BM25 indexing:
+
+```bash
+python main.py --mode preprocess --use_bm25
+```
+
+---
+
+### 💬 3. Launch the Chatbot
+
+You can choose **which retrieval mode to use**:
+
+| Mode              | Description                                                         |
+| ----------------- | ------------------------------------------------------------------- |
+| `faiss` (default) | Uses dense semantic retrieval — best for natural language queries   |
+| `bm25`            | Uses keyword-based search — good for exact matches or rare terms    |
+| `hybrid`          | Combines both FAISS and BM25 — best for balanced recall & precision |
+
+#### ➤ Launch (default = FAISS):
 
 ```bash
 streamlit run main.py -- --mode chatbot
 ```
 
-> 💡 Use `--` before mode when running with `streamlit`.
+#### ➤ Use BM25 only:
+
+```bash
+streamlit run main.py -- --mode chatbot --retriever bm25
+```
+
+#### ➤ Use hybrid (FAISS + BM25):
+
+```bash
+streamlit run main.py -- --mode chatbot --retriever hybrid
+```
 
 ---
 
-## ✅ Features
+## 🧠 How Retrieval Works
 
-- Modular structure with class-based architecture.
-- FAISS-based dense retrieval.
-- LLM-based answer generation using Ollama + LangChain.
-- Configurable file paths, models, and directories.
-- GPU-compatible out of the box (MiniLM uses GPU if available).
+### ✅ FAISS (Dense Semantic Retrieval)
 
----
+- Uses `all-MiniLM-L6-v2` via `sentence-transformers`
+- Captures meaning beyond keywords
+- Great for paraphrased or long-form questions
+- Leverages GPU if available
 
-## 📝 Summary
+### ✅ BM25 (Sparse Keyword Retrieval)
 
-| File           | Responsibility                              |
-| -------------- | ------------------------------------------- |
-| `chunking.py`  | Extract and chunk PDF texts                 |
-| `embedding.py` | Generate embeddings, store in FAISS         |
-| `RAG.py`       | Retrieve relevant chunks + generate answers |
-| `config.py`    | Centralized config (paths + models)         |
-| `main.py`      | Unified CLI to run full pipeline or chatbot |
+- Based on token overlap + frequency
+- Great for matching **exact phrases**, **chemical names**, or **IDs**
+- Especially helpful for niche scientific jargon
 
----
+### ✅ Hybrid
 
-## 🙌 Acknowledgements
-
-- [Sentence Transformers](https://www.sbert.net/)
-- [FAISS](https://github.com/facebookresearch/faiss)
-- [Ollama](https://ollama.com)
-- [LangChain](https://www.langchain.com/)
+- Retrieves top-k from both BM25 + FAISS
+- De-duplicates and merges
+- Ensures **strong recall** and **semantic depth**
 
 ---
 
-Enjoy querying your academic corpus like a pro researcher! 🧪📚🤖
+## 🔧 Configuration
+
+All file paths and model names are stored in:
+
+```python
+config.py
+```
+
+You can change:
+
+- `RAW_PDF_DIR` — path to your academic PDFs
+- `LLM_MODEL_NAME` — Ollama model to run (e.g. `"llama3.2:latest"`)
+- `EMBEDDING_MODEL_NAME` — transformer model for embeddings
+
+---
+
+## 🔍 Benefits of the System
+
+- ⚙️ Fully modular (chunking, embedding, BM25, chatbot)
+- 🧠 LLM-powered contextual answers
+- 🔌 Easily swappable retrievers (FAISS, BM25, Hybrid)
+- 🚀 GPU-compatible for faster embeddings
+- 🖼️ Interactive UI with Streamlit
+- 🔄 Automatic Ollama startup if not already running
+- 🔓 Designed to scale and integrate future enhancements (e.g. GraphRAG)
+
+---
+
+## 🙌 Credits & Tools Used
+
+- FAISS — Dense vector search
+- RankBM25 — Sparse keyword search
+- LangChain — LLM orchestration
+- Ollama — Local LLM serving
+- SentenceTransformers — Embeddings
+
+---
+
+Built for deep, document-grounded academic question answering.  
+_Query smarter, not harder_ 🤖📘✨
