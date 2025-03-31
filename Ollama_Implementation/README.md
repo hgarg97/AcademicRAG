@@ -13,16 +13,20 @@ It integrates:
 
 ## 🚦 End-to-End Workflow Overview
 
-```mermaid
-graph TD;
-    A[PDFs] --> B[Chunking: chunking.py];
-    B --> C[Vector Embeddings: embedding.py];
-    B --> D[BM25 Indexing (optional): bm25.py];
-    C --> E[FAISS Index];
-    D --> E2[BM25 Index];
-    E --> F[Chatbot Query: RAG.py];
-    E2 --> F;
-    F --> G[Answer via LLaMA 3.2 (Ollama)];
+```
+[PDFs]
+ ↓
+chunking.py (semantic splitting)
+ ↓
+embedding.py → FAISS index
+       ↓
+   bm25.py → BM25 index (optional)
+       ↓
+RAG.py (retriever: faiss / bm25 / hybrid)
+ ↓
+LLaMA 3.2 (via Ollama)
+ ↓
+Answer + References
 ```
 
 ---
