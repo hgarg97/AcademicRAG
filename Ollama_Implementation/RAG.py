@@ -11,6 +11,7 @@ from langchain_ollama.llms import OllamaLLM
 from langchain_core.prompts import ChatPromptTemplate
 from embedding import FAISSManager
 from bm25 import BM25Retriever
+from graph_retriever import GraphRetriever
 
 class AcademicRAG:
     def __init__(self, retriever_mode="faiss"):
@@ -18,7 +19,8 @@ class AcademicRAG:
         self.faiss_path = config.FAISS_INDEX_PATH
         self.metadata_path = config.METADATA_PATH
         self.retriever_mode = retriever_mode
-        self.bm25 = BM25Retriever() if retriever_mode in ["bm25", "hybrid"] else None
+        self.bm25 = BM25Retriever() if "bm25" in retriever_mode else None
+        self.graph = GraphRetriever(config.GRAPH_PATH) if "graphrag" in retriever_mode else None
         self.embedding_model = SentenceTransformer(config.EMBEDDING_MODEL_NAME)
         self.llm = OllamaLLM(model=config.LLM_MODEL_NAME)
         self.prompt_template = ChatPromptTemplate.from_template("""
@@ -41,7 +43,7 @@ class AcademicRAG:
     def find_related_chunks(self, query, top_k=5):
         results, references, files = [], set(), set()
 
-        if self.retriever_mode in ["faiss", "hybrid"]:
+        if "faiss" in self.retriever_mode:
             faiss_index = self.load_faiss_index()
             query_embedding = self.embedding_model.encode([query], convert_to_numpy=True)
             distances, indices = faiss_index.search(query_embedding, top_k)
@@ -53,12 +55,18 @@ class AcademicRAG:
                     references.add(f"{metadata[idx]['paper']} (DOI: {metadata[idx].get('doi', 'N/A')})")
                     files.add(metadata[idx].get("file_name"))
 
-        if self.retriever_mode in ["bm25", "hybrid"] and self.bm25:
+        if self.bm25:
             bm25_chunks = self.bm25.search(query, top_k=top_k)
             for chunk in bm25_chunks:
                 results.append((chunk["chunk"], chunk["file_name"]))
                 references.add(f"{chunk['paper']} (DOI: {chunk.get('doi', 'N/A')})")
                 files.add(chunk["file_name"])
+
+        if self.graph:
+            graph_chunks = self.graph.query(query, depth=2)
+            for edge in graph_chunks:
+                results.append((edge["sentence"], edge["source"] + " ↔ " + edge["target"]))
+                references.add("Graph Entity: " + edge["source"])
 
         seen = set()
         deduped = []
@@ -76,20 +84,15 @@ class AcademicRAG:
         return f"{response}<br><br><p style='color:#500000;font-size:18px;'><strong>📚 References:</strong><br>{refs}</p>"
 
     def launch_ui(self):
-        IMAGE_DIR = "images"
-        TAMU_LOGO_PATH = os.path.join(IMAGE_DIR, "tamu.jpg")
-        BACKGROUND_IMAGE = os.path.join(IMAGE_DIR, "holstein.jpg")
-
-        st.set_page_config(page_title="Animal Science Chatbot", layout="wide")
-
-        with open(TAMU_LOGO_PATH, "rb") as img_file:
+        with open(config.TAMU_LOGO_PATH, "rb") as img_file:
             logo_base64 = base64.b64encode(img_file.read()).decode()
 
-        bg_img = Image.open(BACKGROUND_IMAGE)
+        bg_img = Image.open(config.BACKGROUND_IMAGE_PATH)
         buffered = BytesIO()
         bg_img.save(buffered, format="JPEG")
         bg_base64 = base64.b64encode(buffered.getvalue()).decode()
 
+        st.set_page_config(page_title="Animal Science Chatbot", layout="wide")
         st.markdown(
             f"""
             <style>
@@ -173,7 +176,7 @@ class AcademicRAG:
                 chunks, refs, files = self.find_related_chunks(user_query, top_k=10)
                 response = self.generate_answer(user_query, chunks, refs)
 
-            with st.chat_message("assistant", avatar="🧬"):
+            with st.chat_message("assistant", avatar="🦮"):
                 st.markdown(response, unsafe_allow_html=True)
 
             with st.expander("🔍 View Retrieved Context Chunks"):

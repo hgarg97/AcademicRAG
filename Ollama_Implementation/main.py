@@ -4,6 +4,11 @@
 # To Use BM25
 # python main.py --mode preprocess --use_bm25
 
+# To Use GraphRAG
+# python main.py --mode preprocess --use_graphrag
+
+# Hybrid (Bm25 + GraphRAG)
+# python main.py --mode preprocess --use_bm25 --use_graphrag
 
 # To Launch the Chatbot
 # FAISS (default)
@@ -12,7 +17,19 @@
 # BM25 only
 # streamlit run main.py -- --mode chatbot --retriever bm25
 
-# Hybrid (BM25 + FAISS)
+# GraphRAG only
+# streamlit run main.py -- --mode chatbot --retriever graphrag
+
+# Hybrid (FAISS + BM25)
+# streamlit run main.py -- --mode chatbot --retriever hybrid
+
+# FAISS + GraphRAG
+# streamlit run main.py -- --mode chatbot --retriever faiss+graphrag
+
+# BM25 + GraphRAG
+# streamlit run main.py -- --mode chatbot --retriever bm25+graphrag
+
+# Full Hybrid (FAISS + BM25 + GraphRAG)
 # streamlit run main.py -- --mode chatbot --retriever hybrid
 
 import argparse
@@ -22,6 +39,9 @@ from chunking import PDFChunker
 from embedding import FAISSManager
 from RAG import AcademicRAG
 import config
+from graph_extraction import TripletExtractor
+from graph_builder import GraphBuilder
+
 
 def is_ollama_running():
     try:
@@ -29,6 +49,7 @@ def is_ollama_running():
             return True
     except (OSError, ConnectionRefusedError):
         return False
+
 
 def start_ollama_if_needed(model_name):
     if not is_ollama_running():
@@ -41,7 +62,8 @@ def start_ollama_if_needed(model_name):
     else:
         print("🟢 Ollama is already running.")
 
-def run_preprocessing(use_bm25=False):
+
+def run_preprocessing(use_bm25=False, use_graphrag=False):
     print("🔄 Starting Preprocessing Pipeline...")
     start_ollama_if_needed(config.LLM_MODEL_NAME)
 
@@ -66,13 +88,27 @@ def run_preprocessing(use_bm25=False):
         retriever.build_index()
         print("✅ BM25 Indexing completed!")
 
+    # Step 4: Optional GraphRAG
+    if use_graphrag:
+        print("🔗 Building GraphRAG...")
+        TripletExtractor(model_name=config.TRIPLET_MODEL_NAME).run(
+            chunked_path=config.CHUNKED_JSON_PATH,
+            output_path=config.TRIPLET_PATH
+        )
+        builder = GraphBuilder(triplet_file=config.TRIPLET_PATH)
+        builder.build_graph()
+        builder.save_graph(path=config.GRAPH_PATH)
+        print("✅ GraphRAG saved to", config.GRAPH_PATH)
+
     print("🚀 Preprocessing Completed! Ready for Retrieval.")
+
 
 def run_chatbot(retriever_mode="faiss"):
     print(f"💬 Launching Academic RAG Chatbot with {retriever_mode.upper()} retriever...")
     start_ollama_if_needed(config.LLM_MODEL_NAME)
     app = AcademicRAG(retriever_mode=retriever_mode)
     app.launch_ui()
+
 
 def main():
     parser = argparse.ArgumentParser(description="Academic RAG Pipeline")
@@ -88,21 +124,26 @@ def main():
         help="Also build BM25 index in preprocessing step."
     )
     parser.add_argument(
+        "--use_graphrag",
+        action="store_true",
+        help="Also run GraphRAG triplet extraction and graph building."
+    )
+    parser.add_argument(
         "--retriever",
-        choices=["faiss", "bm25", "hybrid"],
+        choices=["faiss", "bm25", "graphrag", "hybrid", "faiss+graphrag", "bm25+graphrag"],
         default="faiss",
         help="Retriever to use in chatbot mode"
     )
 
-
     args = parser.parse_args()
 
     if args.mode == "preprocess":
-        run_preprocessing(use_bm25=args.use_bm25)
+        run_preprocessing(use_bm25=args.use_bm25, use_graphrag=args.use_graphrag)
 
     elif args.mode == "chatbot":
         print(f"📥 Using {args.retriever.upper()} retriever mode.")
         run_chatbot(retriever_mode=args.retriever)
+
 
 if __name__ == "__main__":
     main()

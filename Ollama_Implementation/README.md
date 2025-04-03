@@ -6,7 +6,8 @@ It integrates:
 
 - Document preprocessing and intelligent **chunking**
 - **Dense vector search (FAISS)** for semantic retrieval
-- Optional **sparse keyword search (BM25)** for exact match queries
+- **Sparse keyword search (BM25)** for exact match queries
+- **Graph-based retrieval (GraphRAG)** via scientific entity relationships
 - A **Streamlit chatbot** interface powered by LLMs
 
 ---
@@ -22,7 +23,9 @@ embedding.py → FAISS index
        ↓
    bm25.py → BM25 index (optional)
        ↓
-RAG.py (retriever: faiss / bm25 / hybrid)
+graph_extraction.py + graph_builder.py → GraphRAG (optional)
+       ↓
+RAG.py (retriever: faiss / bm25 / graphrag / hybrid)
  ↓
 LLaMA 3.2 (via Ollama)
  ↓
@@ -33,15 +36,18 @@ Answer + References
 
 ## 📂 Folder Structure & Key Files
 
-| File            | Purpose                                          |
-| --------------- | ------------------------------------------------ |
-| `chunking.py`   | Extract and intelligently chunk PDF text         |
-| `embedding.py`  | Create vector embeddings using MiniLM            |
-| `bm25.py`       | Create a sparse keyword search index             |
-| `RAG.py`        | RAG chatbot logic with retriever + LLM           |
-| `config.py`     | Centralized config for paths and model names     |
-| `main.py`       | Unified CLI for preprocessing and chatbot launch |
-| `vector_store/` | Stores FAISS + BM25 indexes and metadata         |
+| File/Folder           | Purpose                                          |
+| --------------------- | ------------------------------------------------ |
+| `chunking.py`         | Extract and intelligently chunk PDF text         |
+| `embedding.py`        | Create vector embeddings using MiniLM            |
+| `bm25.py`             | Create a sparse keyword search index             |
+| `graph_extraction.py` | Extract triplets (subject, relation, object)     |
+| `graph_builder.py`    | Build a directed graph from triplets             |
+| `graph_retriever.py`  | Query neighbors/entities from the graph          |
+| `RAG.py`              | RAG chatbot logic with retriever + LLM           |
+| `config.py`           | Centralized config for paths and model names     |
+| `main.py`             | Unified CLI for preprocessing and chatbot launch |
+| `files/`              | Stores FAISS, BM25, Graph indexes and metadata   |
 
 ---
 
@@ -63,6 +69,7 @@ This step:
 - Chunks their text
 - Generates embeddings for semantic retrieval (FAISS)
 - (Optional) Creates BM25 index for exact keyword search
+- (Optional) Extracts triplets and builds a GraphRAG knowledge graph
 
 #### ➤ Run FAISS-only pipeline:
 
@@ -76,31 +83,64 @@ python main.py --mode preprocess
 python main.py --mode preprocess --use_bm25
 ```
 
+#### ➤ Run FAISS + GraphRAG indexing:
+
+```bash
+python main.py --mode preprocess --use_graphrag
+```
+
+#### ➤ Run FAISS + BM25 + GraphRAG:
+
+```bash
+python main.py --mode preprocess --use_bm25 --use_graphrag
+```
+
 ---
 
 ### 💬 3. Launch the Chatbot
 
 You can choose **which retrieval mode to use**:
 
-| Mode              | Description                                                         |
-| ----------------- | ------------------------------------------------------------------- |
-| `faiss` (default) | Uses dense semantic retrieval — best for natural language queries   |
-| `bm25`            | Uses keyword-based search — good for exact matches or rare terms    |
-| `hybrid`          | Combines both FAISS and BM25 — best for balanced recall & precision |
+| Mode              | Description                                                           |
+| ----------------- | --------------------------------------------------------------------- |
+| `faiss` (default) | Dense semantic retrieval — great for paraphrased or long-form queries |
+| `bm25`            | Sparse keyword match — great for exact phrases, chemical names        |
+| `graphrag`        | Graph-based — queries related entities via knowledge triplets         |
+| `faiss+graphrag`  | Combines FAISS + Graph for semantic + entity-grounded context         |
+| `bm25+graphrag`   | Combines BM25 + Graph for keyword + entity retrieval                  |
+| `hybrid`          | Combines FAISS + BM25 + Graph — best for comprehensive retrieval      |
 
-#### ➤ Launch (default = FAISS):
+#### ➤ Launch default (FAISS):
 
 ```bash
 streamlit run main.py -- --mode chatbot
 ```
 
-#### ➤ Use BM25 only:
+#### ➤ BM25 only:
 
 ```bash
 streamlit run main.py -- --mode chatbot --retriever bm25
 ```
 
-#### ➤ Use hybrid (FAISS + BM25):
+#### ➤ GraphRAG only:
+
+```bash
+streamlit run main.py -- --mode chatbot --retriever graphrag
+```
+
+#### ➤ FAISS + GraphRAG:
+
+```bash
+streamlit run main.py -- --mode chatbot --retriever faiss+graphrag
+```
+
+#### ➤ BM25 + GraphRAG:
+
+```bash
+streamlit run main.py -- --mode chatbot --retriever bm25+graphrag
+```
+
+#### ➤ Full hybrid (FAISS + BM25 + GraphRAG):
 
 ```bash
 streamlit run main.py -- --mode chatbot --retriever hybrid
@@ -115,19 +155,23 @@ streamlit run main.py -- --mode chatbot --retriever hybrid
 - Uses `all-MiniLM-L6-v2` via `sentence-transformers`
 - Captures meaning beyond keywords
 - Great for paraphrased or long-form questions
-- Leverages GPU if available
 
 ### ✅ BM25 (Sparse Keyword Retrieval)
 
 - Based on token overlap + frequency
-- Great for matching **exact phrases**, **chemical names**, or **IDs**
-- Especially helpful for niche scientific jargon
+- Ideal for exact matches, chemical names, acronyms
+
+### ✅ GraphRAG (Knowledge Graph Retrieval)
+
+- Uses `SciBERT` (or BioBERT) to extract triplets
+- Builds graph where nodes = entities, edges = relations from text
+- Returns related nodes and sentences using graph traversal
 
 ### ✅ Hybrid
 
-- Retrieves top-k from both BM25 + FAISS
-- De-duplicates and merges
-- Ensures **strong recall** and **semantic depth**
+- Combines top results from all retrievals
+- Deduplicates context
+- Ensures semantic + symbolic + lexical coverage
 
 ---
 
@@ -142,20 +186,22 @@ config.py
 You can change:
 
 - `RAW_PDF_DIR` — path to your academic PDFs
-- `LLM_MODEL_NAME` — Ollama model to run (e.g. `"llama3.2:latest"`)
+- `LLM_MODEL_NAME` — Ollama model to run (e.g. `llama3.2:latest`)
 - `EMBEDDING_MODEL_NAME` — transformer model for embeddings
+- `TRIPLET_MODEL_NAME` — SciBERT/BioBERT model for triplet extraction
+- `TAMU_LOGO_PATH`, `BACKGROUND_IMAGE_PATH` — Streamlit UI images
 
 ---
 
 ## 🔍 Benefits of the System
 
-- ⚙️ Fully modular (chunking, embedding, BM25, chatbot)
+- ⚙️ Fully modular (chunking, embedding, BM25, Graph, chatbot)
 - 🧠 LLM-powered contextual answers
-- 🔌 Easily swappable retrievers (FAISS, BM25, Hybrid)
+- 🔌 Easily swappable retrievers (FAISS, BM25, GraphRAG, Hybrid)
 - 🚀 GPU-compatible for faster embeddings
-- 🖼️ Interactive UI with Streamlit
-- 🔄 Automatic Ollama startup if not already running
-- 🔓 Designed to scale and integrate future enhancements (e.g. GraphRAG)
+- 🖼️ Beautiful Streamlit UI
+- 🔄 Automatic Ollama startup if not running
+- 🔓 Designed to scale with future improvements
 
 ---
 
@@ -163,9 +209,11 @@ You can change:
 
 - FAISS — Dense vector search
 - RankBM25 — Sparse keyword search
+- NetworkX — Graph operations
 - LangChain — LLM orchestration
 - Ollama — Local LLM serving
 - SentenceTransformers — Embeddings
+- HuggingFace Transformers — SciBERT for entity triplets
 
 ---
 

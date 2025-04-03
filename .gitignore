@@ -5,7 +5,6 @@ thumbnail.JPG
 Dataset/
 Subdataset/
 Ollama_Implementation/document_store/
-Ollama_Implementation/vector_store/
-Ollama_Implementation/chunked_texts.json
+Ollama_Implementation/files/
 __pycache__/
 Ollama_Implementation/images/

@@ -11,3 +11,6 @@ numpy
 requests
 faiss-cpu
 rank_bm25
+transformers
+torch
+networkx
