@@ -8,3 +8,4 @@ Ollama_Implementation/document_store/
 Ollama_Implementation/vector_store/
 Ollama_Implementation/chunked_texts.json
 __pycache__/
+Ollama_Implementation/images/

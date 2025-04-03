@@ -2,11 +2,14 @@ import os
 import json
 import faiss
 import streamlit as st
+import base64
+import config
+from io import BytesIO
+from PIL import Image
 from sentence_transformers import SentenceTransformer
 from langchain_ollama.llms import OllamaLLM
 from langchain_core.prompts import ChatPromptTemplate
 from embedding import FAISSManager
-import config
 from bm25 import BM25Retriever
 
 class AcademicRAG:
@@ -57,7 +60,6 @@ class AcademicRAG:
                 references.add(f"{chunk['paper']} (DOI: {chunk.get('doi', 'N/A')})")
                 files.add(chunk["file_name"])
 
-        # Deduplicate results by chunk text
         seen = set()
         deduped = []
         for r in results:
@@ -69,49 +71,123 @@ class AcademicRAG:
 
     def generate_answer(self, query, chunks, references):
         context = "\n\n".join(chunk[0] for chunk in chunks)
-        refs = "\n".join(f"- {ref}" for ref in references)
+        refs = "<br>".join(f"- {ref}" for ref in references)
         response = (self.prompt_template | self.llm).invoke({"user_query": query, "document_context": context})
-        return f"{response}\n\n📚 **References:**\n{refs}"
+        return f"{response}<br><br><p style='color:#500000;font-size:18px;'><strong>📚 References:</strong><br>{refs}</p>"
 
     def launch_ui(self):
-        st.title("📘 Academic RAG - Chatbot")
-        st.markdown("### Ask questions based on indexed research papers!")
+        IMAGE_DIR = "images"
+        TAMU_LOGO_PATH = os.path.join(IMAGE_DIR, "tamu.jpg")
+        BACKGROUND_IMAGE = os.path.join(IMAGE_DIR, "holstein.jpg")
 
-        # Initialize chat history
+        st.set_page_config(page_title="Animal Science Chatbot", layout="wide")
+
+        with open(TAMU_LOGO_PATH, "rb") as img_file:
+            logo_base64 = base64.b64encode(img_file.read()).decode()
+
+        bg_img = Image.open(BACKGROUND_IMAGE)
+        buffered = BytesIO()
+        bg_img.save(buffered, format="JPEG")
+        bg_base64 = base64.b64encode(buffered.getvalue()).decode()
+
+        st.markdown(
+            f"""
+            <style>
+            .stApp {{
+                background-image: url("data:image/jpeg;base64,{bg_base64}");
+                background-size: cover;
+                background-repeat: no-repeat;
+                background-attachment: fixed;
+            }}
+            .block-container {{
+                background-color: rgba(255, 255, 255, 0.50);
+                padding: 2.5rem;
+                border-radius: 20px;
+            }}
+            h1 {{ font-size: 40px !important; }}
+            h4 {{ font-size: 18px !important; color: white !important; }}
+            h3, h5 {{ font-size: 24px !important; color: #500000 !important; font-weight: bold !important; }}
+            .stMarkdown p {{ font-size: 18px !important; color: #500000 !important; }}
+            div[data-testid="stChatMessageContent"] {{ color: #500000 !important; font-size: 18px !important; }}
+            details summary {{
+                color: #500000 !important;
+                font-size: 14px !important;
+                font-weight: 600 !important;
+                background-color: #f3f3f3 !important;
+                padding: 6px 12px !important;
+                border-radius: 6px !important;
+                margin-bottom: 8px !important;
+                cursor: pointer;
+            }}
+            details p, details span {{
+                color: #333 !important;
+                font-size: 14px !important;
+                background-color: transparent !important;
+                padding: 6px 0 !important;
+                border-radius: 0 !important;
+                margin-top: 6px !important;
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.markdown(f'''
+            <div style="background-color:#500000;padding:20px 30px;border-radius:12px;margin-bottom:20px;display:flex;align-items:center;">
+                <img src="data:image/png;base64,{logo_base64}" style="height:80px;margin-right:30px">
+                <div>
+                    <h1 style="color:white;margin:0;">Animal Science RAG Chatbot</h1>
+                    <h4 style="color:white;font-size:18px;margin:0;">
+                        Explore cutting-edge animal nutrition research powered by Texas A&M and LLaMA 3.2.
+                    </h4>
+                </div>
+            </div>
+        ''', unsafe_allow_html=True)
+
+        st.markdown("""
+        ### 🐄 Who Are We?
+        <p style='color:#500000; font-size:18px;'>
+        We are a research-driven platform dedicated to advancing the accessibility and analysis of animal nutrition science through cutting-edge AI technologies. Our system leverages Retrieval-Augmented Generation (RAG) pipelines powered by Large Language Models (LLMs) like Meta’s LLaMA to provide fast, context-aware answers from a curated library of scientific publications.<br><br>
+        This tool enables researchers, students, and industry experts to efficiently search, retrieve, and synthesize insights from thousands of peer-reviewed research papers in the field of animal science. Whether you're exploring new feed formulations, analyzing health outcomes, or reviewing recent advancements in livestock nutrition, this intelligent assistant provides structured, reference-backed responses to support your decision-making and innovation.
+        </p>
+        """, unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown("""
+        ### 💬 Ask a question below:
+        """)
+
         if "chat_history" not in st.session_state:
             st.session_state.chat_history = []
 
-        # Display chat history
         for role, text in st.session_state.chat_history:
             with st.chat_message(role):
                 st.write(text)
 
-        # User Query Input
         user_query = st.chat_input("Enter your research query...")
         if user_query:
-            # Display user query
             with st.chat_message("user"):
                 st.write(user_query)
 
-            # Retrieve relevant chunks & references
             with st.spinner("Retrieving relevant information..."):
                 chunks, refs, files = self.find_related_chunks(user_query, top_k=10)
                 response = self.generate_answer(user_query, chunks, refs)
-            
-            # 🔹 Display Retrieved Chunks with Source Papers
-            with st.expander("🔍 Retrieved Context Chunks (Click to Expand)"):
+
+            with st.chat_message("assistant", avatar="🧬"):
+                st.markdown(response, unsafe_allow_html=True)
+
+            with st.expander("🔍 View Retrieved Context Chunks"):
                 for idx, (chunk, file) in enumerate(chunks):
-                    st.markdown(f"**Chunk {idx+1}:**")
-                    st.info(chunk)
-            with st.expander("📂 Source Papers (Click to Expand)"):
+                    st.markdown(f"**Chunk {idx+1} from {file}:**")
+                    st.markdown(f"""
+                    <div style='border-left: 4px solid #500000; padding-left: 10px; margin: 8px 0;'>
+                        <p style='margin: 0; font-size: 14px; color: #333; line-height: 1.5;'>{chunk}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+            with st.expander("📂 Source Papers"):
                 for file in files:
-                    path = f"{config.RAW_PDF_DIR}/{file}"
-                    st.markdown(f"[📄 {file}]({path})", unsafe_allow_html=True)
-            
-            # Display AI response
-            with st.chat_message("assistant", avatar="🤖"):
-                st.write(response)
-            
-            # Store conversation in history
+                    st.markdown(f"[📄 {file}]({config.RAW_PDF_DIR}/{file})")
+
             st.session_state.chat_history.append(("user", user_query))
             st.session_state.chat_history.append(("assistant", response))
