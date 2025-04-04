@@ -24,13 +24,17 @@ class AcademicRAG:
         self.graph = GraphRetriever(config.GRAPH_PATH) if retriever_mode in ["graphrag", "faiss+graphrag", "bm25+graphrag", "hybrid"] else None
         self.embedding_model = SentenceTransformer(config.EMBEDDING_MODEL_NAME)
         self.llm = OllamaLLM(model=config.LLM_MODEL_NAME)
-        self.prompt_template = ChatPromptTemplate.from_template("""
+        self.chat_prompt = ChatPromptTemplate.from_template("""
         You are an expert research assistant with knowledge of Animal Science Research.
-        Use the provided context to answer the query. If unsure, say you don't know.
-        Be concise and factual.
+        Use the previous conversation (if any) and provided context to answer this query. If unsure, say you don't know.
 
-        Query: {user_query}
-        Context: {document_context}
+        Previous Conversation:
+        {history_context}
+
+        Current Query: {user_query}
+        Context:
+        {document_context}
+
         Answer:
         """)
 
@@ -81,10 +85,14 @@ class AcademicRAG:
 
         return deduped[:top_k], references, list(files)
 
-    def generate_answer(self, query, chunks, references):
+    def generate_answer(self, query, chunks, references, history_context=""):
         context = "\n\n".join(chunk[0] for chunk in chunks)
         refs = "<br>".join(f"- {ref}" for ref in references)
-        response = (self.prompt_template | self.llm).invoke({"user_query": query, "document_context": context})
+        response = (self.chat_prompt | self.llm).invoke({
+            "user_query": query,
+            "document_context": context,
+            "history_context": history_context
+        })
         return f"{response}<br><br><p style='color:#500000;font-size:18px;'><strong>📚 References:</strong><br>{refs}</p>"
 
     def launch_ui(self):
@@ -176,9 +184,14 @@ class AcademicRAG:
             with st.chat_message("user"):
                 st.write(user_query)
 
+            # Use last 2 exchanges for context
+            history_context = ""
+            for role, msg in st.session_state.chat_history[-4:]:
+                history_context += f"{role.capitalize()}: {msg}\n"
+
             with st.spinner("Retrieving relevant information..."):
                 chunks, refs, files = self.find_related_chunks(user_query, top_k=10)
-                response = self.generate_answer(user_query, chunks, refs)
+                response = self.generate_answer(user_query, chunks, refs, history_context)
 
             with st.chat_message("assistant", avatar="🦮"):
                 st.markdown(response, unsafe_allow_html=True)
