@@ -9,6 +9,16 @@ It integrates:
 - **Sparse keyword search (BM25)** for exact match queries
 - **Graph-based retrieval (GraphRAG)** via scientific entity relationships
 - A **Streamlit chatbot** interface powered by LLMs
+- 🔄 **Multi-turn conversational memory** for context-aware follow-up questions
+- 📄 **Paper Summary Generator** to summarize full research papers into Abstract, Methods, Results, and Conclusion
+
+➡️ Coming soon:
+
+- 👍 **User feedback mode** for response rating
+- 🧠 **FAISS metadata filtering** (e.g. by paper title)
+- 🕸️ **Named graphs/subgraph support** in GraphRAG
+- 📊 **Cross-encoder-based reranking** for fusion pipelines
+- **Docker Integration** for migration to different devices
 
 ---
 
@@ -29,7 +39,7 @@ RAG.py (retriever: faiss / bm25 / graphrag / hybrid)
  ↓
 LLaMA 3.2 (via Ollama)
  ↓
-Answer + References
+Answer + References + Summary (optional)
 ```
 
 ---
@@ -70,6 +80,7 @@ This step:
 - Generates embeddings for semantic retrieval (FAISS)
 - (Optional) Creates BM25 index for exact keyword search
 - (Optional) Extracts triplets and builds a GraphRAG knowledge graph
+  - 🔬 Uses **BioNER-based entity extraction** for scientific concepts
 
 #### ➤ Run FAISS-only pipeline:
 
@@ -163,9 +174,10 @@ streamlit run main.py -- --mode chatbot --retriever hybrid
 
 ### ✅ GraphRAG (Knowledge Graph Retrieval)
 
-- Uses `SciBERT` (or BioBERT) to extract triplets
-- Builds graph where nodes = entities, edges = relations from text
-- Returns related nodes and sentences using graph traversal
+- Uses `SciBERT` or `BioBERT` for **entity and triplet extraction**
+- Entities are extracted using **transformer-based NER models** (e.g. `d4data/biomedical-ner-all`)
+- Graph is constructed where nodes = entities and edges = contextual relationships from papers
+- Supports multi-hop traversal for enhanced query matching
 
 ### ✅ Hybrid
 
@@ -189,7 +201,23 @@ You can change:
 - `LLM_MODEL_NAME` — Ollama model to run (e.g. `llama3.2:latest`)
 - `EMBEDDING_MODEL_NAME` — transformer model for embeddings
 - `TRIPLET_MODEL_NAME` — SciBERT/BioBERT model for triplet extraction
+- `NER_MODEL_NAME` — HuggingFace biomedical NER model
 - `TAMU_LOGO_PATH`, `BACKGROUND_IMAGE_PATH` — Streamlit UI images
+
+---
+
+## 🧠 Key Features
+
+- 🗣️ **Multi-turn conversational memory** — follow up with related questions
+- 📄 **Paper summary generation** — extract insights by section (Abstract, Methods, etc.)
+- 🔁 Graph + BM25 + FAISS integration for **hybrid search**
+
+➡️ **Planned Enhancements**:
+
+- 👍 Feedback-based rating and evaluation logging
+- 🧠 Metadata filtering during retrieval (e.g. per paper)
+- 🕸 Named subgraph queries for thematic focus
+- 📊 Fusion reranking with cross-encoders for better results
 
 ---
 
@@ -213,7 +241,7 @@ You can change:
 - LangChain — LLM orchestration
 - Ollama — Local LLM serving
 - SentenceTransformers — Embeddings
-- HuggingFace Transformers — SciBERT for entity triplets
+- HuggingFace Transformers — BioNER, SciBERT for triplets
 
 ---
 
