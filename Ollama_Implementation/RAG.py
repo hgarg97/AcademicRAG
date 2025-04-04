@@ -44,6 +44,34 @@ class AcademicRAG:
         if not os.path.exists(self.faiss_path):
             FAISSManager().process_embeddings()
         return faiss.read_index(self.faiss_path)
+    
+    def summarize_paper(self, paper_title: str):
+        with open(self.metadata_path, "r", encoding="utf-8") as f:
+            metadata = json.load(f)
+
+        selected_chunks = [item["chunk"] for item in metadata if item["paper"] == paper_title]
+        context = "\n\n".join(selected_chunks)
+
+        summary_prompt = ChatPromptTemplate.from_template("""
+        You are a scientific summarizer. Given the context from a research paper, generate a clear, concise summary broken down as:
+
+        1. Abstract
+        2. Methodology
+        3. Results
+        4. Conclusion
+
+        Paper Title: {paper_title}
+        Context:
+        {context}
+
+        Summary:
+        """)
+
+        response = (summary_prompt | self.llm).invoke({
+            "paper_title": paper_title,
+            "context": context
+        })
+        return response
 
     def find_related_chunks(self, query, top_k=5):
         results, references, files = [], set(), set()
@@ -211,3 +239,20 @@ class AcademicRAG:
 
             st.session_state.chat_history.append(("user", user_query))
             st.session_state.chat_history.append(("assistant", response))
+
+
+        st.markdown("---")
+        st.markdown("""
+        ### 📄 Paper Summary Generator
+        """)
+        with st.expander("🧠 Summarize a Research Paper"):
+            with open(config.METADATA_PATH, "r", encoding="utf-8") as f:
+                metadata = json.load(f)
+            paper_titles = sorted(set(item["paper"] for item in metadata if item.get("paper")))
+            selected_paper = st.selectbox("Select a paper to summarize:", paper_titles)
+
+            if st.button("Generate Summary"):
+                with st.spinner("Summarizing paper..."):
+                    summary = self.summarize_paper(selected_paper)
+                    st.markdown("### 📝 Summary:")
+                    st.markdown(summary)
