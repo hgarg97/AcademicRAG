@@ -1,16 +1,32 @@
+# === Core Dependencies ===
 streamlit
-langchain_core
-langchain_community
-langchain_ollama
-pdfplumber
-sentence-transformers
-pymupdf
-nltk
-scikit-learn
-numpy
-requests
 faiss-cpu
+sentence-transformers
 rank_bm25
+networkx
+numpy
+pandas
+scikit-learn
+tqdm
+
+# === LLMs & LangChain ===
+langchain
+langchain-core
+langchain-community
+langchain-ollama
+ollama
+
+# === PDF Parsing ===
+PyMuPDF  # or fitz
+
+# === Image + UI Assets ===
+Pillow
+
+# === Hugging Face NER (for biomedical entity extraction) ===
 transformers
 torch
-networkx
+accelerate
+
+# === Optional: For GPU acceleration (if using CUDA) ===
+# Uncomment if needed
+# torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118

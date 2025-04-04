@@ -12,6 +12,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from embedding import FAISSManager
 from bm25 import BM25Retriever
 from graph_retriever import GraphRetriever
+from graph_extraction import TripletExtractor
 
 class AcademicRAG:
     def __init__(self, retriever_mode="faiss"):
@@ -19,8 +20,8 @@ class AcademicRAG:
         self.faiss_path = config.FAISS_INDEX_PATH
         self.metadata_path = config.METADATA_PATH
         self.retriever_mode = retriever_mode
-        self.bm25 = BM25Retriever() if "bm25" in retriever_mode else None
-        self.graph = GraphRetriever(config.GRAPH_PATH) if "graphrag" in retriever_mode else None
+        self.bm25 = BM25Retriever() if retriever_mode in ["bm25", "bm25+graphrag", "hybrid"] else None
+        self.graph = GraphRetriever(config.GRAPH_PATH) if retriever_mode in ["graphrag", "faiss+graphrag", "bm25+graphrag", "hybrid"] else None
         self.embedding_model = SentenceTransformer(config.EMBEDDING_MODEL_NAME)
         self.llm = OllamaLLM(model=config.LLM_MODEL_NAME)
         self.prompt_template = ChatPromptTemplate.from_template("""
@@ -63,10 +64,13 @@ class AcademicRAG:
                 files.add(chunk["file_name"])
 
         if self.graph:
-            graph_chunks = self.graph.query(query, depth=2)
-            for edge in graph_chunks:
-                results.append((edge["sentence"], edge["source"] + " ↔ " + edge["target"]))
-                references.add("Graph Entity: " + edge["source"])
+            extractor = TripletExtractor(model_name=config.TRIPLET_MODEL_NAME)
+            entities = extractor.extract_entities(query)
+            for entity in entities:
+                graph_chunks = self.graph.query(entity, depth=2)
+                for edge in graph_chunks:
+                    results.append((edge["sentence"], f"{edge['source']} ↔ {edge['target']}"))
+                    references.add(f"Graph Entity: {edge['source']}")
 
         seen = set()
         deduped = []
