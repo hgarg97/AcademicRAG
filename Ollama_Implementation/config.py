@@ -19,3 +19,9 @@ NER_MODEL_NAME = "d4data/biomedical-ner-all"
 IMAGE_DIR = "images"
 TAMU_LOGO_PATH = f"{IMAGE_DIR}/tamu.jpg"
 BACKGROUND_IMAGE_PATH = f"{IMAGE_DIR}/holstein.jpg"
+
+# === Available LLM Models (Display Name → Model ID) ===
+LLM_MODEL_OPTIONS = {
+    "LLaMA 3.2": "llama3.2:latest",
+    "DeepSeek 1.5B": "deepseek-r1:1.5b"
+}

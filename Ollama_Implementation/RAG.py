@@ -12,6 +12,7 @@ from bm25 import BM25Retriever
 from graph_retriever import GraphRetriever
 from graph_extraction import TripletExtractor
 import config
+import shutil
 
 class AcademicRAG:
     def __init__(self, retriever_mode="faiss"):
@@ -22,7 +23,10 @@ class AcademicRAG:
         self.bm25 = BM25Retriever() if retriever_mode in ["bm25", "bm25+graphrag", "hybrid"] else None
         self.graph = GraphRetriever(config.GRAPH_PATH) if retriever_mode in ["graphrag", "faiss+graphrag", "bm25+graphrag", "hybrid"] else None
         self.embedding_model = SentenceTransformer(config.EMBEDDING_MODEL_NAME)
-        self.llm = OllamaLLM(model=config.LLM_MODEL_NAME)
+        self.llm = None  # initialized later
+        self.llm_temperature = 0.7
+        self.model_name = os.getenv("RAG_MODEL_NAME", config.LLM_MODEL_NAME)
+        self.set_temperature(self.llm_temperature)
         self.chat_prompt = ChatPromptTemplate.from_template("""
         You are an expert research assistant with knowledge of Animal Science Research.
         Use the previous conversation (if any) and provided context to answer this query. If unsure, say you don't know.
@@ -45,6 +49,15 @@ class AcademicRAG:
         if not os.path.exists(self.faiss_path):
             FAISSManager().process_embeddings()
         return faiss.read_index(self.faiss_path)
+    
+    def set_model(self, model_name: str):
+        self.model_name = model_name
+        print(f"✅ [RAG] Setting model to: {model_name}")
+        self.set_temperature(self.llm_temperature)
+    
+    def set_temperature(self, temperature: float):
+        self.llm_temperature = temperature
+        self.llm = OllamaLLM(model=self.model_name, temperature=temperature)
 
     def summarize_paper(self, paper_title: str):
         with open(self.metadata_path, "r", encoding="utf-8") as f:
@@ -68,6 +81,7 @@ class AcademicRAG:
             "paper_title": paper_title,
             "context": context
         })
+        return response
 
     def get_all_paper_titles(self):
         with open(self.metadata_path, "r", encoding="utf-8") as f:
@@ -138,3 +152,8 @@ class AcademicRAG:
             "history_context": history_context
         })
         return f"{response}\n\n📚 **References:**\n{refs}"
+    
+    # Auto-purge uploaded_pdfs on session end
+    def cleanup_uploaded_pdfs(self):
+        if os.path.exists("uploaded_pdfs"):
+            shutil.rmtree("uploaded_pdfs")

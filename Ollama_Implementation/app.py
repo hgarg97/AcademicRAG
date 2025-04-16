@@ -1,6 +1,8 @@
 import os
 import streamlit as st
 from RAG import AcademicRAG
+from config import LLM_MODEL_OPTIONS
+import config
 
 retriever_mode = os.getenv("RAG_RETRIEVER_MODE", "faiss")
 rag = AcademicRAG(retriever_mode=retriever_mode)
@@ -12,6 +14,31 @@ st.markdown("### Ask questions based on indexed research papers or your uploaded
 
 # === Sidebar: Upload + Summarize ===
 with st.sidebar:
+
+    st.subheader("🎛️ Model Settings")
+
+    available_display_names = list(LLM_MODEL_OPTIONS.keys())
+    # Match default model from config
+    default_display = next(name for name, internal in LLM_MODEL_OPTIONS.items() if internal == config.LLM_MODEL_NAME)
+    selected_display = st.selectbox("Choose LLM Model:", available_display_names, index=available_display_names.index(default_display))
+
+    selected_model = LLM_MODEL_OPTIONS[selected_display]
+
+    # 🌡️ Temperature slider first
+    temperature = st.slider("LLM Temperature (creativity)", min_value=0.0, max_value=1.5, value=0.7, step=0.1)
+
+    # ✅ Now apply model/temperature settings
+    if "selected_model" not in st.session_state or st.session_state.selected_model != selected_model:
+        st.session_state.selected_model = selected_model
+        rag.set_model(selected_model)
+
+    rag.set_temperature(temperature)
+
+    st.markdown(f"**🔧 Current model in use:** `{selected_model}`")
+
+
+    st.markdown("---")
+
     st.header("📄 Upload Your PDF")
     uploaded_file = st.file_uploader("Upload PDF", type="pdf")
     if uploaded_file:
@@ -74,4 +101,6 @@ if user_query:
 # === Reset Button ===
 if st.button("🗑️ Clear Conversation"):
     st.session_state.chat_history = []
-    st.experimental_rerun()
+    rag.cleanup_uploaded_pdfs()
+    st.success("Conversation cleared and temporary files deleted.")
+    st.rerun()
