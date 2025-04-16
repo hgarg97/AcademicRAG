@@ -1,18 +1,17 @@
 import os
 import json
 import faiss
-import streamlit as st
-import base64
-import config
-from io import BytesIO
-from PIL import Image
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 from langchain_ollama.llms import OllamaLLM
 from langchain_core.prompts import ChatPromptTemplate
+from chunking import PDFChunker
 from embedding import FAISSManager
 from bm25 import BM25Retriever
 from graph_retriever import GraphRetriever
 from graph_extraction import TripletExtractor
+import config
 
 class AcademicRAG:
     def __init__(self, retriever_mode="faiss"):
@@ -37,6 +36,8 @@ class AcademicRAG:
 
         Answer:
         """)
+        self.user_pdf_chunks = []
+        self.raw_pdf_dir = config.RAW_PDF_DIR
 
     def load_faiss_index(self):
         vector_dir = os.path.dirname(self.faiss_path)
@@ -44,17 +45,14 @@ class AcademicRAG:
         if not os.path.exists(self.faiss_path):
             FAISSManager().process_embeddings()
         return faiss.read_index(self.faiss_path)
-    
+
     def summarize_paper(self, paper_title: str):
         with open(self.metadata_path, "r", encoding="utf-8") as f:
             metadata = json.load(f)
-
         selected_chunks = [item["chunk"] for item in metadata if item["paper"] == paper_title]
         context = "\n\n".join(selected_chunks)
-
         summary_prompt = ChatPromptTemplate.from_template("""
         You are a scientific summarizer. Given the context from a research paper, generate a clear, concise summary broken down as:
-
         1. Abstract
         2. Methodology
         3. Results
@@ -66,16 +64,38 @@ class AcademicRAG:
 
         Summary:
         """)
-
         response = (summary_prompt | self.llm).invoke({
             "paper_title": paper_title,
             "context": context
         })
-        return response
+
+    def get_all_paper_titles(self):
+        with open(self.metadata_path, "r", encoding="utf-8") as f:
+            metadata = json.load(f)
+        return sorted(set(item["paper"] for item in metadata if item.get("paper")))
+
+    def process_uploaded_pdf(self, uploaded_file):
+        os.makedirs("uploaded_pdfs", exist_ok=True)
+        temp_path = os.path.join("uploaded_pdfs", uploaded_file.name)
+        with open(temp_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        chunker = PDFChunker()
+        self.user_pdf_chunks = chunker.process_pdf(temp_path)
+
+    def query_uploaded_pdfs(self, user_query, history_context=""):
+        query_emb = self.embedding_model.encode([user_query], convert_to_numpy=True)[0]
+        chunk_embeddings = self.embedding_model.encode([c["chunk"] for c in self.user_pdf_chunks], convert_to_numpy=True)
+        sims = cosine_similarity([query_emb], chunk_embeddings)[0]
+        top_k_idx = sims.argsort()[::-1][:5]
+        chunks = [(self.user_pdf_chunks[i]["chunk"], self.user_pdf_chunks[i]["file_name"]) for i in top_k_idx]
+        refs = {"Uploaded Document"}
+        files = [self.user_pdf_chunks[0]["file_name"]] if self.user_pdf_chunks else []
+        context = "\n\n".join(chunk[0] for chunk in chunks)
+        response = (self.chat_prompt | self.llm).invoke({"user_query": user_query, "document_context": context, "history_context": history_context})
+        return chunks, refs, files, response
 
     def find_related_chunks(self, query, top_k=5):
         results, references, files = [], set(), set()
-
         if "faiss" in self.retriever_mode:
             faiss_index = self.load_faiss_index()
             query_embedding = self.embedding_model.encode([query], convert_to_numpy=True)
@@ -87,14 +107,12 @@ class AcademicRAG:
                     results.append((metadata[idx]["chunk"], metadata[idx].get("file_name")))
                     references.add(f"{metadata[idx]['paper']} (DOI: {metadata[idx].get('doi', 'N/A')})")
                     files.add(metadata[idx].get("file_name"))
-
         if self.bm25:
             bm25_chunks = self.bm25.search(query, top_k=top_k)
             for chunk in bm25_chunks:
                 results.append((chunk["chunk"], chunk["file_name"]))
                 references.add(f"{chunk['paper']} (DOI: {chunk.get('doi', 'N/A')})")
                 files.add(chunk["file_name"])
-
         if self.graph:
             extractor = TripletExtractor(model_name=config.TRIPLET_MODEL_NAME)
             entities = extractor.extract_entities(query)
@@ -103,156 +121,20 @@ class AcademicRAG:
                 for edge in graph_chunks:
                     results.append((edge["sentence"], f"{edge['source']} ↔ {edge['target']}"))
                     references.add(f"Graph Entity: {edge['source']}")
-
         seen = set()
         deduped = []
         for r in results:
             if r[0] not in seen:
                 deduped.append(r)
                 seen.add(r[0])
-
         return deduped[:top_k], references, list(files)
 
     def generate_answer(self, query, chunks, references, history_context=""):
         context = "\n\n".join(chunk[0] for chunk in chunks)
-        refs = "<br>".join(f"- {ref}" for ref in references)
+        refs = "\n".join(f"- {ref}" for ref in references)
         response = (self.chat_prompt | self.llm).invoke({
             "user_query": query,
             "document_context": context,
             "history_context": history_context
         })
-        return f"{response}<br><br><p style='color:#500000;font-size:18px;'><strong>📚 References:</strong><br>{refs}</p>"
-
-    def launch_ui(self):
-        with open(config.TAMU_LOGO_PATH, "rb") as img_file:
-            logo_base64 = base64.b64encode(img_file.read()).decode()
-
-        bg_img = Image.open(config.BACKGROUND_IMAGE_PATH)
-        buffered = BytesIO()
-        bg_img.save(buffered, format="JPEG")
-        bg_base64 = base64.b64encode(buffered.getvalue()).decode()
-
-        st.set_page_config(page_title="Animal Science Chatbot", layout="wide")
-        st.markdown(
-            f"""
-            <style>
-            .stApp {{
-                background-image: url("data:image/jpeg;base64,{bg_base64}");
-                background-size: cover;
-                background-repeat: no-repeat;
-                background-attachment: fixed;
-            }}
-            .block-container {{
-                background-color: rgba(255, 255, 255, 0.50);
-                padding: 2.5rem;
-                border-radius: 20px;
-            }}
-            h1 {{ font-size: 40px !important; }}
-            h4 {{ font-size: 18px !important; color: white !important; }}
-            h3, h5 {{ font-size: 24px !important; color: #500000 !important; font-weight: bold !important; }}
-            .stMarkdown p {{ font-size: 18px !important; color: #500000 !important; }}
-            div[data-testid="stChatMessageContent"] {{ color: #500000 !important; font-size: 18px !important; }}
-            details summary {{
-                color: #500000 !important;
-                font-size: 14px !important;
-                font-weight: 600 !important;
-                background-color: #f3f3f3 !important;
-                padding: 6px 12px !important;
-                border-radius: 6px !important;
-                margin-bottom: 8px !important;
-                cursor: pointer;
-            }}
-            details p, details span {{
-                color: #333 !important;
-                font-size: 14px !important;
-                background-color: transparent !important;
-                padding: 6px 0 !important;
-                border-radius: 0 !important;
-                margin-top: 6px !important;
-            }}
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
-
-        st.markdown(f'''
-            <div style="background-color:#500000;padding:20px 30px;border-radius:12px;margin-bottom:20px;display:flex;align-items:center;">
-                <img src="data:image/png;base64,{logo_base64}" style="height:80px;margin-right:30px">
-                <div>
-                    <h1 style="color:white;margin:0;">Animal Science RAG Chatbot</h1>
-                    <h4 style="color:white;font-size:18px;margin:0;">
-                        Explore cutting-edge animal nutrition research powered by Texas A&M and LLaMA 3.2.
-                    </h4>
-                </div>
-            </div>
-        ''', unsafe_allow_html=True)
-
-        st.markdown("""
-        ### 🐄 Who Are We?
-        <p style='color:#500000; font-size:18px;'>
-        We are a research-driven platform dedicated to advancing the accessibility and analysis of animal nutrition science through cutting-edge AI technologies. Our system leverages Retrieval-Augmented Generation (RAG) pipelines powered by Large Language Models (LLMs) like Meta’s LLaMA to provide fast, context-aware answers from a curated library of scientific publications.<br><br>
-        This tool enables researchers, students, and industry experts to efficiently search, retrieve, and synthesize insights from thousands of peer-reviewed research papers in the field of animal science. Whether you're exploring new feed formulations, analyzing health outcomes, or reviewing recent advancements in livestock nutrition, this intelligent assistant provides structured, reference-backed responses to support your decision-making and innovation.
-        </p>
-        """, unsafe_allow_html=True)
-
-        st.markdown("---")
-        st.markdown("""
-        ### 💬 Ask a question below:
-        """)
-
-        if "chat_history" not in st.session_state:
-            st.session_state.chat_history = []
-
-        for role, text in st.session_state.chat_history:
-            with st.chat_message(role):
-                st.write(text)
-
-        user_query = st.chat_input("Enter your research query...")
-        if user_query:
-            with st.chat_message("user"):
-                st.write(user_query)
-
-            # Use last 2 exchanges for context
-            history_context = ""
-            for role, msg in st.session_state.chat_history[-4:]:
-                history_context += f"{role.capitalize()}: {msg}\n"
-
-            with st.spinner("Retrieving relevant information..."):
-                chunks, refs, files = self.find_related_chunks(user_query, top_k=10)
-                response = self.generate_answer(user_query, chunks, refs, history_context)
-
-            with st.chat_message("assistant", avatar="🦮"):
-                st.markdown(response, unsafe_allow_html=True)
-
-            with st.expander("🔍 View Retrieved Context Chunks"):
-                for idx, (chunk, file) in enumerate(chunks):
-                    st.markdown(f"**Chunk {idx+1} from {file}:**")
-                    st.markdown(f"""
-                    <div style='border-left: 4px solid #500000; padding-left: 10px; margin: 8px 0;'>
-                        <p style='margin: 0; font-size: 14px; color: #333; line-height: 1.5;'>{chunk}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-            with st.expander("📂 Source Papers"):
-                for file in files:
-                    st.markdown(f"[📄 {file}]({config.RAW_PDF_DIR}/{file})")
-
-            st.session_state.chat_history.append(("user", user_query))
-            st.session_state.chat_history.append(("assistant", response))
-
-
-        st.markdown("---")
-        st.markdown("""
-        ### 📄 Paper Summary Generator
-        """)
-        with st.expander("🧠 Summarize a Research Paper"):
-            with open(config.METADATA_PATH, "r", encoding="utf-8") as f:
-                metadata = json.load(f)
-            paper_titles = sorted(set(item["paper"] for item in metadata if item.get("paper")))
-            selected_paper = st.selectbox("Select a paper to summarize:", paper_titles)
-
-            if st.button("Generate Summary"):
-                with st.spinner("Summarizing paper..."):
-                    summary = self.summarize_paper(selected_paper)
-                    st.markdown("### 📝 Summary:")
-                    st.markdown(summary)
+        return f"{response}\n\n📚 **References:**\n{refs}"

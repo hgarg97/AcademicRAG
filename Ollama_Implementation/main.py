@@ -41,6 +41,8 @@ from RAG import AcademicRAG
 import config
 from graph_extraction import TripletExtractor
 from graph_builder import GraphBuilder
+import os
+import subprocess
 
 
 def is_ollama_running():
@@ -106,8 +108,8 @@ def run_preprocessing(use_bm25=False, use_graphrag=False):
 def run_chatbot(retriever_mode="faiss"):
     print(f"💬 Launching Academic RAG Chatbot with {retriever_mode.upper()} retriever...")
     start_ollama_if_needed(config.LLM_MODEL_NAME)
-    app = AcademicRAG(retriever_mode=retriever_mode)
-    app.launch_ui()
+    os.environ["RAG_RETRIEVER_MODE"] = retriever_mode
+    subprocess.run(["streamlit", "run", "app.py"])
 
 
 def main():
