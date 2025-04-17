@@ -19,6 +19,8 @@ NER_MODEL_NAME = "d4data/biomedical-ner-all"
 IMAGE_DIR = "images"
 TAMU_LOGO_PATH = f"{IMAGE_DIR}/tamu.jpg"
 BACKGROUND_IMAGE_PATH = f"{IMAGE_DIR}/holstein.jpg"
+FAVICON_IMAGE_PATH = f"{IMAGE_DIR}/favicon-96x96.png"
+LOGO_IMAGE_PATH = f"{IMAGE_DIR}/logo.svg"
 
 # === Available LLM Models (Display Name → Model ID) ===
 LLM_MODEL_OPTIONS = {

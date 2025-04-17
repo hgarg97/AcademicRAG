@@ -8,22 +8,20 @@ from PIL import Image
 retriever_mode = os.getenv("RAG_RETRIEVER_MODE", "faiss")
 rag = AcademicRAG(retriever_mode=retriever_mode)
 
-favicon_img = "images/favicon-96x96.png"
-
 st.set_page_config(
     page_title="Academic RAG - Chatbot",
     layout="wide",
-    page_icon = favicon_img
+    page_icon = config.FAVICON_IMAGE_PATH
 )
 
 # st.markdown(
-#     '<img src=favicon_img width="36" style="vertical-align: middle; margin-right: 10px;">'
+#     '<img src=config.FAVICON_IMAGE_PATH width="36" style="vertical-align: middle; margin-right: 10px;">'
 #     '<span style="font-size: 28px; font-weight: bold;">Academic RAG - Chatbot</span>',
 #     unsafe_allow_html=True
 # )
 col1, col2 = st.columns([1, 10])
 with col1:
-    st.image("images/favicon-96x96.png", width=60)
+    st.image(config.FAVICON_IMAGE_PATH, width=60)
 with col2:
     st.markdown("<div style='font-size: 40px; font-weight: bold;'>Academic RAG - Chatbot</div>", unsafe_allow_html=True)
 
@@ -37,7 +35,7 @@ We leverage Retrieval-Augmented Generation (RAG) pipelines powered by LLMs like 
 # === Sidebar: Global Settings ===
 with st.sidebar:
 
-    with open("images/logo.svg", "r") as f:
+    with open(config.LOGO_IMAGE_PATH, "r") as f:
         svg_code = f.read()
 
     st.sidebar.markdown(
