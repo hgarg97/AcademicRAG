@@ -96,17 +96,36 @@ class AcademicRAG:
         chunker = PDFChunker()
         self.user_pdf_chunks = chunker.process_pdf(temp_path)
 
-    def query_uploaded_pdfs(self, user_query, history_context=""):
+    def query_uploaded_pdfs(self, user_query, history_context="", selected_file=None):
+        # Filter chunks if a specific file was selected
+        chunks_to_search = self.user_pdf_chunks
+        if selected_file:
+            chunks_to_search = [chunk for chunk in self.user_pdf_chunks if chunk["file_name"] == selected_file]
+
+        if not chunks_to_search:
+            return [], {"No chunks found for selected file."}, [], "⚠️ No content available to retrieve."
+
+        # Compute similarity
         query_emb = self.embedding_model.encode([user_query], convert_to_numpy=True)[0]
-        chunk_embeddings = self.embedding_model.encode([c["chunk"] for c in self.user_pdf_chunks], convert_to_numpy=True)
+        chunk_embeddings = self.embedding_model.encode([c["chunk"] for c in chunks_to_search], convert_to_numpy=True)
         sims = cosine_similarity([query_emb], chunk_embeddings)[0]
         top_k_idx = sims.argsort()[::-1][:5]
-        chunks = [(self.user_pdf_chunks[i]["chunk"], self.user_pdf_chunks[i]["file_name"]) for i in top_k_idx]
-        refs = {"Uploaded Document"}
-        files = [self.user_pdf_chunks[0]["file_name"]] if self.user_pdf_chunks else []
-        context = "\n\n".join(chunk[0] for chunk in chunks)
-        response = (self.chat_prompt | self.llm).invoke({"user_query": user_query, "document_context": context, "history_context": history_context})
-        return chunks, refs, files, response
+
+        # Prepare chunks
+        top_chunks = [(chunks_to_search[i]["chunk"], chunks_to_search[i]["file_name"]) for i in top_k_idx]
+        refs = {f"Uploaded Document: {selected_file}"} if selected_file else {"Uploaded Document"}
+        files = [selected_file] if selected_file else list({chunk["file_name"] for chunk in top_chunks})
+        context = "\n\n".join(chunk[0] for chunk in top_chunks)
+
+        # Run LLM
+        response = (self.chat_prompt | self.llm).invoke({
+            "user_query": user_query,
+            "document_context": context,
+            "history_context": history_context
+        })
+
+        return top_chunks, refs, files, response
+
 
     def find_related_chunks(self, query, top_k=5):
         results, references, files = [], set(), set()

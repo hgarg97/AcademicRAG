@@ -11,10 +11,13 @@ It integrates:
 - A **Streamlit chatbot** interface powered by LLMs
 - 🔄 **Multi-turn conversational memory** for context-aware follow-up questions
 - 📄 **Paper Summary Generator** to summarize full research papers into Abstract, Methods, Results, and Conclusion
+- 📂 **Multi-PDF upload support** with isolated session-based querying
+- 🧼 **Auto-cleanup of uploaded PDF chunks** after session reset
+- 🎛️ **Model and temperature selection** directly from the sidebar
+- 🧠 **Dropdown-scoped PDF querying** (select one uploaded file to query)
 
 ➡️ Coming soon:
 
-- 👍 **User feedback mode** for response rating
 - 🧠 **FAISS metadata filtering** (e.g. by paper title)
 - 🕸️ **Named graphs/subgraph support** in GraphRAG
 - 📊 **Cross-encoder-based reranking** for fusion pipelines
@@ -46,18 +49,20 @@ Answer + References + Summary (optional)
 
 ## 📂 Folder Structure & Key Files
 
-| File/Folder           | Purpose                                          |
-| --------------------- | ------------------------------------------------ |
-| `chunking.py`         | Extract and intelligently chunk PDF text         |
-| `embedding.py`        | Create vector embeddings using MiniLM            |
-| `bm25.py`             | Create a sparse keyword search index             |
-| `graph_extraction.py` | Extract triplets (subject, relation, object)     |
-| `graph_builder.py`    | Build a directed graph from triplets             |
-| `graph_retriever.py`  | Query neighbors/entities from the graph          |
-| `RAG.py`              | RAG chatbot logic with retriever + LLM           |
-| `config.py`           | Centralized config for paths and model names     |
-| `main.py`             | Unified CLI for preprocessing and chatbot launch |
-| `files/`              | Stores FAISS, BM25, Graph indexes and metadata   |
+| File/Folder           | Purpose                                                         |
+| --------------------- | --------------------------------------------------------------- |
+| `chunking.py`         | Extract and intelligently chunk PDF text                        |
+| `embedding.py`        | Create vector embeddings using MiniLM                           |
+| `bm25.py`             | Create a sparse keyword search index                            |
+| `graph_extraction.py` | Extract triplets (subject, relation, object)                    |
+| `graph_builder.py`    | Build a directed graph from triplets                            |
+| `graph_retriever.py`  | Query neighbors/entities from the graph                         |
+| `RAG.py`              | RAG chatbot logic with retriever + LLM                          |
+| `config.py`           | Centralized config for paths and model names                    |
+| `main.py`             | Unified CLI for preprocessing and chatbot launch                |
+| `app.py`              | Streamlit UI with tabs, model/temperature selection, PDF upload |
+| `files/`              | Stores FAISS, BM25, Graph indexes and metadata                  |
+| `uploaded_pdfs/`      | Session-scoped temporary storage for uploaded PDFs              |
 
 ---
 
@@ -203,6 +208,7 @@ You can change:
 - `TRIPLET_MODEL_NAME` — SciBERT/BioBERT model for triplet extraction
 - `NER_MODEL_NAME` — HuggingFace biomedical NER model
 - `TAMU_LOGO_PATH`, `BACKGROUND_IMAGE_PATH` — Streamlit UI images
+- `LLM_MODEL_OPTIONS` — models shown in dropdown for dynamic selection
 
 ---
 
@@ -211,10 +217,14 @@ You can change:
 - 🗣️ **Multi-turn conversational memory** — follow up with related questions
 - 📄 **Paper summary generation** — extract insights by section (Abstract, Methods, etc.)
 - 🔁 Graph + BM25 + FAISS integration for **hybrid search**
+- 📂 **Upload any PDF**, query with BM25 + semantic similarity
+- 🔍 **Dropdown to select uploaded PDF** — avoids cross-file contamination
+- 🧹 **Auto-clean temp uploads** when session resets
+- 🧠 **Independent conversation states** per tab (Chatbot vs Uploaded)
+- 🧠 **Dropdown search and sanitization** (filters "Unknown Title", removes HTML tags)
 
 ➡️ **Planned Enhancements**:
 
-- 👍 Feedback-based rating and evaluation logging
 - 🧠 Metadata filtering during retrieval (e.g. per paper)
 - 🕸 Named subgraph queries for thematic focus
 - 📊 Fusion reranking with cross-encoders for better results

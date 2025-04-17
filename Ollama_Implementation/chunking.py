@@ -40,7 +40,13 @@ class PDFChunker:
             response = requests.get(url, timeout=10)
             response.raise_for_status()
             data = response.json()
-            return data["message"]["title"][0] if "message" in data and "title" in data["message"] else None
+            raw_title = data["message"]["title"][0] if "message" in data and "title" in data["message"] else None
+
+            # ✅ Remove any HTML tags like <i>...</i>
+            if raw_title:
+                clean_title = re.sub(r"<.*?>", "", raw_title)
+                return clean_title.strip()
+            return None
         except Exception as e:
             print(f"❌ Error fetching title for DOI {doi}: {e}")
             return None
