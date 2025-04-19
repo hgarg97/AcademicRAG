@@ -2,12 +2,14 @@ import re
 import json
 from transformers import pipeline
 import config
+import torch
 
 class TripletExtractor:
     def __init__(self, model_name=config.TRIPLET_MODEL_NAME, ner_model_name=config.NER_MODEL_NAME):
         self.model_name = model_name
         self.ner_model_name = ner_model_name
-        self.ner_pipeline = pipeline("ner", model=ner_model_name, tokenizer=ner_model_name, aggregation_strategy="simple")
+        device = 0 if torch.cuda.is_available() else -1
+        self.ner_pipeline = pipeline("ner", model=ner_model_name, tokenizer=ner_model_name, aggregation_strategy="simple", device=device)
 
     def extract_entities(self, sentence):
         """

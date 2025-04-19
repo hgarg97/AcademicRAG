@@ -4,13 +4,15 @@ import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 import config
+import torch
 
 class FAISSManager:
     def __init__(self, chunked_path=config.CHUNKED_JSON_PATH, vector_path=config.FAISS_INDEX_PATH, meta_path=config.METADATA_PATH):
         self.chunked_path = chunked_path
         self.vector_path = vector_path
         self.meta_path = meta_path
-        self.embedding_model = SentenceTransformer(config.EMBEDDING_MODEL_NAME)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.embedding_model = SentenceTransformer(config.EMBEDDING_MODEL_NAME, device=device)
         os.makedirs(os.path.dirname(self.vector_path), exist_ok=True)
 
     def load_chunked_texts(self):

@@ -8,10 +8,12 @@ from nltk.tokenize.punkt import PunktSentenceTokenizer
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import config
+import torch
 
 class PDFChunker:
     def __init__(self, output_json=config.CHUNKED_JSON_PATH):
-        self.model = SentenceTransformer(config.EMBEDDING_MODEL_NAME)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model = SentenceTransformer(config.EMBEDDING_MODEL_NAME, device=device)
         self.tokenizer = PunktSentenceTokenizer()
         self.output_json = output_json
         self.doi_pattern = r"10\.\d{4,9}/\S*[^.\s]"

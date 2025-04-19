@@ -31,6 +31,7 @@
 
 # Full Hybrid (FAISS + BM25 + GraphRAG)
 # streamlit run main.py -- --mode chatbot --retriever hybrid
+# $env:RAG_RETRIEVER_MODE = "hybrid"; streamlit run app.py
 
 import argparse
 import subprocess
@@ -43,7 +44,12 @@ from graph_extraction import TripletExtractor
 from graph_builder import GraphBuilder
 import os
 import subprocess
+import torch
 
+if torch.cuda.is_available():
+    print(f"✅ CUDA is available. Using GPU: {torch.cuda.get_device_name(0)}")
+else:
+    print("⚠️ CUDA not available. Running on CPU.")
 
 def is_ollama_running():
     try:

@@ -2,7 +2,7 @@ import os
 import shutil
 
 # Define the main folder (current directory)
-main_folder = os.getcwd()
+main_folder = "Dataset/"
 
 # Iterate through all subfolders
 for root, dirs, files in os.walk(main_folder):
